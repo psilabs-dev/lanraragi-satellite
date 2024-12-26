@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "satellite"
+version = "1.0"
+authors = [
+    {name="psilabs-dev"}
+]
+description = "A satellite server for LANraragi to perform various tasks."
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.10, <3.13"
+dynamic = [
+    "dependencies"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "tox>=4.23.0",
+    "ruff"
+]
+
+[project.urls]
+Homepage = "https://github.com/psilabs-dev/lanraragi-satellite"
+
+[tool.ruff]
+extend-select = ["ASYNC", "C4", "SIM"]
+show-fixes = true
+ignore = ["ASYNC230"] # use normal blocking open, aiofiles may be too slow.
+target-version = "py310"
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.setuptools.packages.find]
+include = ["satellite*"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
