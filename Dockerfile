@@ -1,5 +1,8 @@
 FROM python:3.11
 
+ARG SATELLITE_GIT_COMMIT_HASH
+ENV SATELLITE_GIT_COMMIT_HASH=${SATELLITE_GIT_COMMIT_HASH}
+
 WORKDIR /workdir
 COPY requirements.txt   /workdir/requirements.txt
 RUN pip3 install -r requirements.txt

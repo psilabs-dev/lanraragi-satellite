@@ -3,7 +3,7 @@
 import asyncio
 from pathlib import Path
 import time
-from typing import Iterable, Tuple, Union
+from typing import Iterable, List, Tuple, Union
 
 import aiosqlite
 import bcrypt
@@ -156,7 +156,7 @@ class DatabaseService:
         async with aiosqlite.connect(self.db) as conn, conn.execute("SELECT md5, path, status, mtime FROM archive_scan WHERE md5 = ?", (md5,)) as cursor:
             return await cursor.fetchone()
     
-    async def get_archive_scans_by_status(self, status: int, limit: int=100_000) -> Union[Tuple[str, str, int, float], None]:
+    async def get_archive_scans_by_status(self, status: int, limit: int=100_000) -> List[Tuple[str, str, int, float]]:
         if limit:
             async with aiosqlite.connect(self.db) as conn, conn.execute("SELECT md5, path, status, mtime FROM archive_scan WHERE status = ? LIMIT ?", (status, limit)) as cursor:
                 return await cursor.fetchall()

@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from satellite.app import config
 from satellite.app.auth import is_valid_api_key_header
+from satellite.app.locks import LockState, get_lock_state
 from satellite.app.services.metadata import update_metadata, update_metadata_from_plugin
 from satellite.service.database import DatabaseService
 from satellite.service.metadata import NhentaiArchivistMetadataService, PixivUtil2MetadataService
@@ -22,7 +23,7 @@ router = APIRouter(
 )
 
 @router.post("/nhentai-archivist")
-async def queue_update_data_from_nhentai_archivist(background_tasks: BackgroundTasks):
+async def queue_update_data_from_nhentai_archivist(background_tasks: BackgroundTasks, lock_state: LockState=Depends(get_lock_state)):
     try:
         lanraragi = LRRClient(lrr_host=config.satellite_config.LRR_HOST, lrr_api_key=config.satellite_config.LRR_API_KEY)
         metadata_service = NhentaiArchivistMetadataService(config.satellite_config.METADATA_NHENTAI_ARCHIVIST_DB)
@@ -30,11 +31,11 @@ async def queue_update_data_from_nhentai_archivist(background_tasks: BackgroundT
         return JSONResponse({
             "message": "Misconfiguration error: " + str(error)
         }, status_code=500)
-    background_tasks.add_task(update_metadata, lanraragi, metadata_service)
+    background_tasks.add_task(update_metadata, lanraragi, metadata_service, lock_state.RWLOCK)
     return JSONResponse({"message": "Queued metadata updates for nhentai archivist."})
 
 @router.post("/pixivutil2")
-async def queue_update_data_from_pixivutil2(background_tasks: BackgroundTasks):
+async def queue_update_data_from_pixivutil2(background_tasks: BackgroundTasks, lock_state: LockState=Depends(get_lock_state)):
     try:
         lanraragi = LRRClient(lrr_host=config.satellite_config.LRR_HOST, lrr_api_key=config.satellite_config.LRR_API_KEY)
         metadata_service = PixivUtil2MetadataService(config.satellite_config.METADATA_PIXIVUTIL2_DB)
@@ -42,11 +43,13 @@ async def queue_update_data_from_pixivutil2(background_tasks: BackgroundTasks):
         return JSONResponse({
             "message": "Misconfiguration error: " + str(error)
         }, status_code=500)
-    background_tasks.add_task(update_metadata, lanraragi, metadata_service)
+    background_tasks.add_task(update_metadata, lanraragi, metadata_service, lock_state.RWLOCK)
     return JSONResponse({"message": "Queued metadata updates for PixivUtil2."})
 
 @router.post("/plugins/{plugin_namespace}")
-async def queue_update_archive_metadata_with_plugin(background_tasks: BackgroundTasks, plugin_namespace: str, retry_ok: bool=False):
+async def queue_update_archive_metadata_with_plugin(
+    background_tasks: BackgroundTasks, plugin_namespace: str, lock_state: LockState=Depends(get_lock_state), retry_ok: bool=False, sleep_time: float=5
+):
     """
     Creates a background task that gets all untagged archives, extracts metadata ID,
     invokes the metadata plugin call, and updates said archive with this metadata.
@@ -81,7 +84,10 @@ async def queue_update_archive_metadata_with_plugin(background_tasks: Background
         Namespace of the metadata plugin to invoke (e.g., `pixivmetadata`, `nhplugin`)
     retry_ok : bool = False
         Retry metadata fetch for all successfully scanned archives.
+    sleep_time : float = 5
+        Sets an upper bound sleep time between metadata plugin calls (random.randint(0, 1) * sleep_time).
     """
+    logger.info(f"[metadata_plugin] plugin namespace = {plugin_namespace}, max sleep time = {sleep_time}")
     if not plugin_namespace or plugin_namespace not in {"pixivmetadata", "nhplugin"}:
         return JSONResponse({
             "message": f"Misconfigured plugin namespace: {plugin_namespace}"
@@ -96,7 +102,9 @@ async def queue_update_archive_metadata_with_plugin(background_tasks: Background
     if not db.exists():
         return JSONResponse({"message": "No database!"}, status_code=404)
     database = DatabaseService(db)
-    background_tasks.add_task(update_metadata_from_plugin, lanraragi, database, plugin_namespace, retry_ok=retry_ok)
+    background_tasks.add_task(
+        update_metadata_from_plugin, lanraragi, database, plugin_namespace, lock_state.RWLOCK, sleep_time, retry_ok=retry_ok
+    )
     return JSONResponse({
         "message": f"Queued invokation of the {plugin_namespace} metadata plugin."
     })

@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import overload, Union
 
-from satellite.utils.lanraragi.models import LanraragiArchiveDownloadResponse, LanraragiArchiveMetadataResponse, LanraragiResponse
+from satellite.utils.lanraragi.models import LanraragiArchiveDownloadResponse, LanraragiArchiveMetadataResponse, LanraragiResponse, LanraragiServerInfoResponse
 
 logger = logging.getLogger(__name__)
 
@@ -304,6 +304,23 @@ class LRRClient:
     # ---- END ARCHIVE API ----
 
     # ---- START DATABASE API ----
+    async def get_database_stats(self, minweight: int=1) -> LanraragiResponse:
+        """
+        `GET /api/database/stats`
+        """
+        url = f"{self.lrr_host}/api/database/stats"
+        response = LanraragiResponse()
+        form_data = aiohttp.FormData(quote_fields=False)
+        form_data.add_field('minweight', minweight)
+        async with aiohttp.ClientSession() as session, session.get(url=url, data=form_data, headers=self.headers) as async_response:
+            response.status_code = async_response.status
+            response.success = 1 if async_response.status == 200 else 0
+            try:
+                response.data = await async_response.json()
+            except aiohttp.client_exceptions.ContentTypeError as content_type_error:
+                logger.error("[get_database_stats] Failed to get database stats: ", content_type_error)
+            return response
+
     async def clean_database(self) -> LanraragiResponse:
         """
         `POST /api/database/clean`
@@ -524,12 +541,12 @@ class LRRClient:
 
     # ---- START MISC API ----
     # https://sugoi.gitbook.io/lanraragi/api-documentation/miscellaneous-other-api
-    async def get_server_info(self) -> LanraragiResponse:
+    async def get_server_info(self) -> LanraragiServerInfoResponse:
         """
         `GET /api/info`
         """
         url = f"{self.lrr_host}/api/info"
-        response = LanraragiResponse()
+        response = LanraragiServerInfoResponse()
         async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0

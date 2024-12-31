@@ -12,6 +12,7 @@ class SatelliteConfig:
     SATELLITE_API_KEY: str
     SATELLITE_HOME: Path
     SATELLITE_DB_PATH: Path
+    SATELLITE_GIT_COMMIT_HASH: str
 
     LRR_HOST: str
     LRR_API_KEY: str
@@ -38,6 +39,7 @@ class SatelliteConfig:
         self.SATELLITE_HOME = SATELLITE_HOME
         self.SATELLITE_DB_PATH = self.SATELLITE_HOME / "db" / "db.sqlite"
         self.SATELLITE_API_KEY = os.getenv("SATELLITE_API_KEY")
+        self.SATELLITE_GIT_COMMIT_HASH = os.getenv("SATELLITE_GIT_COMMIT_HASH")
         self.LRR_HOST = os.getenv("LRR_HOST", "http://localhost:3000")
         self.LRR_API_KEY = os.getenv("LRR_API_KEY")
         if _LRR_CONTENTS_DIR := os.getenv("LRR_CONTENTS_DIR"):
