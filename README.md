@@ -16,7 +16,7 @@ This program is intended to run as a containerized web server, with cron jobs ca
 ## Usage
 Build the image:
 ```sh
-docker build -t satellite .
+docker build -t satellite --build-arg SATELLITE_GIT_COMMIT_HASH=$(git rev-parse HEAD) .
 ```
 Run the image:
 ```sh
@@ -66,16 +66,37 @@ services:
       - 127.0.0.1:8000:8000
 ```
 
+### API Usage Examples
+Example of calling the API to perform tasks via curl. Assume that API key is "satellite", host is localhost, and port is 8000.
+
+Scan archives for corrupted images:
+```sh
+curl -X POST -H "Authorization: Bearer satellite" http://localhost:8000/api/archives/scan
+```
+Get archives that have been corrupted (corrupted archives have status 1):
+```sh
+curl -H "Authorization: Bearer satellite" http://localhost:8000/api/archives?status=1
+```
+Apply metadata plugin (pixivmetadata or nhplugin) on all untagged archives. Following is example with Pixiv.
+```sh
+curl -H "Authorization: Bearer satellite" http://localhost:8000/api/metadata/plugins/pixivmetadata
+```
+Upload archives from the folder.
+```sh
+curl -X POST -H "Authorization: Bearer satellite" http://localhost:8000/api/upload
+```
+If archives are folders (like from PixivUtil2), add a `?archive_is_dir=true` query parameter at the end.
+
 ## Configuration
 Satellite configuration is environment variable-driven.
 
 | key | description | default |
 | - | - | - |
-| `SATELLITE_API_KEY` | API key for the `satellite` server. | satellite |
+| `SATELLITE_API_KEY` | API key for the `satellite` server. This key will be registered in the database as a salt and hash, so the variable does not need to be set in the future. | satellite |
 | `SATELLITE_HOME` | Home directory for the `satellite` server. The database is located in `$SATELLITE_HOME/db/db.sqlite`. | `$HOME/.satellite` |
 | - | - | - |
 | `LRR_HOST` | Abs. URL for LANraragi (e.g. "http://localhost:3000" or "https://lanraragi.server") | http://localhost:3000 |
-| `LRR_API_KEY` | API key for the LANraragi server. This key will be registered in the database as a salt and hash, so the variable does not need to be set in the future. | |
+| `LRR_API_KEY` | API key for the LANraragi server. | |
 | `LRR_CONTENTS_DIR` | LRR server Archive directory. | |
 | - | - | - |
 | `METADATA_NHENTAI_ARCHIVIST_DB` | Path to [nhentai archivist](https://github.com/9-FS/nhentai_archivist)'s sqlite database. | |

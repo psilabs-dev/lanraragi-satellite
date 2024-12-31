@@ -5,8 +5,10 @@ import hashlib
 import logging
 from pathlib import Path
 import tempfile
+import time
 
 from aiohttp import ClientConnectionError
+from aiorwlock import RWLock
 
 from satellite.service.database import DatabaseService
 from satellite.utils.file import flat_folder_to_zip
@@ -19,18 +21,9 @@ from satellite.utils.scan import find_all_archives, find_all_leaf_folders
 logger = logging.getLogger("uvicorn.satellite")
 
 async def upload_archives_from_folder(
-        lanraragi: LRRClient, database: DatabaseService, upload_dir: Path, semaphore: Semaphore,
+        lanraragi: LRRClient, database: DatabaseService, upload_dir: Path, semaphore: Semaphore, lock: RWLock,
         archive_is_dir: bool=False
-):
-    
-    # find all archives
-    logger.info("[upload_archives] Scanning archive directory; this may take a while...")
-    if archive_is_dir:
-        archives = find_all_leaf_folders(upload_dir)
-    else:
-        archives = find_all_archives(upload_dir)
-
-    logger.info(f"[upload_archives] Uploading {len(archives)} archives...")
+):    
     async def __handle_archive(archive: Path) -> int:
         async with semaphore:
             archive = archive.absolute()
@@ -93,6 +86,21 @@ async def upload_archives_from_folder(
             else:
                 return await __do_upload(archive, file_name)
 
-    tasks = [asyncio.create_task(__handle_archive(archive)) for archive in archives]
-    upload_success = sum(await asyncio.gather(*tasks))
-    logger.info(f"[upload_archives] {upload_success} archives uploaded.")
+    if lock.writer.locked or lock.reader.locked:
+        logger.warning("[upload_archives] Lock conflict, backing off.")
+        return
+    async with lock.writer_lock:
+        # find all archives
+        logger.info("[upload_archives] Scanning archive directory; this may take a while...")
+        start_time = time.time()
+        if archive_is_dir:
+            archives = find_all_leaf_folders(upload_dir)
+        else:
+            archives = find_all_archives(upload_dir)
+
+        logger.info(f"[upload_archives] Uploading {len(archives)} archives...")
+
+        tasks = [asyncio.create_task(__handle_archive(archive)) for archive in archives]
+        upload_success = sum(await asyncio.gather(*tasks))
+        total_time = time.time() - start_time
+        logger.info(f"[upload_archives] {upload_success} archives uploaded. Total time: {total_time}s.")

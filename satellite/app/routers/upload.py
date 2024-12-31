@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from satellite.app import config
 from satellite.app.auth import is_valid_api_key_header
+from satellite.app.locks import LockState, get_lock_state
 from satellite.app.services.upload import upload_archives_from_folder
 from satellite.service.database import DatabaseService
 from satellite.utils.lanraragi.client import LRRClient
@@ -25,7 +26,9 @@ router = APIRouter(
 )
 
 @router.post("")
-async def queue_upload_archives(background_tasks: BackgroundTasks, archive_is_dir: bool=False, semaphore_val: int=8):
+async def queue_upload_archives(
+    background_tasks: BackgroundTasks, archive_is_dir: bool=False, semaphore_val: int=8, lock_state: LockState=Depends(get_lock_state)
+):
     """
     Creates a background task to upload all Archives from a designated upload 
     directory configured by the environment variable `UPLOAD_DIR`.
@@ -40,6 +43,7 @@ async def queue_upload_archives(background_tasks: BackgroundTasks, archive_is_di
         ".cbz", ".zip" files. When set to True, scans for folders which contain images
         and no subfolders. This setting is for artworks downloaded by PixivUtil2.
     """
+    logger.info(f"[upload_archives] uploading folder-like archives = {archive_is_dir}, semaphore value = {semaphore_val}")
 
     # get required configurations
     lrr_host = config.satellite_config.LRR_HOST
@@ -102,7 +106,7 @@ async def queue_upload_archives(background_tasks: BackgroundTasks, archive_is_di
 
     semaphore = Semaphore(value=semaphore_val)
     background_tasks.add_task(
-        upload_archives_from_folder, lanraragi, database, upload_dir, semaphore, archive_is_dir=archive_is_dir
+        upload_archives_from_folder, lanraragi, database, upload_dir, semaphore, lock_state.RWLOCK, archive_is_dir=archive_is_dir
     )
 
     # perform archives upload job
