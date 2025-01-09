@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "satellite"
-version = "1.1.0"
+version = "1.1.1"
 authors = [
     {name="psilabs-dev"}
 ]
@@ -36,7 +36,11 @@ target-version = "py310"
 "__init__.py" = ["F401"]
 
 [tool.setuptools.packages.find]
-include = ["satellite*"]
+where = ["src"]
+include = ["lanraragi*", "manycbz*", "satellite_server*"]
+
+[tool.setuptools.package-data]
+manycbz = ["*.txt", "*.ttf"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
