@@ -1,6 +1,41 @@
 # lanraragi-satellite
 
-Satellite is an opinionated auxilliary microservice for [LANraragi](https://github.com/Difegue/LANraragi) to perform various tasks, such as:
+A Python library that provides an auxilliary microservice (satellite) for LANraragi, among other utilities that might be useful. Features are developed on an ad hoc basis, rather than to conform to best practices.
+
+## Libraries/Contents
+1. [Installation](#installation)
+1. [Satellite Server](#satellite-server): multi-purpose, opinionated server
+1. [LANraragi Python SDK](#lanraragi-python-sdk): includes an async LANraragi API client
+1. [ManyCBZ](#manycbz): synthetic archive generation toolkit
+
+## Installation
+
+General installation instructions.
+
+### Requirements
+Requirements depend on the library being used, with Satellite Server intended for containerized production deployment. Generally, the following are required:
+
+- A recent version of Python,
+- Docker, if you are using Satellite Server, or want to spin up a test LRR server.
+
+Install the library from source:
+```sh
+pip install .
+```
+
+### Development
+Install developer tools:
+```sh
+pip install ".[dev]"
+```
+Run tests:
+```sh
+export CI=true
+pytest tests
+```
+
+## Satellite Server
+Satellite is an opinionated auxilliary microservice* for [LANraragi](https://github.com/Difegue/LANraragi) to perform various tasks, such as:
 
 - **Archive Processing**: Scan for, and move or remove, corrupted (incomplete) Archives from the LRR contents folder.
     > RW access to the contents folder is required.
@@ -13,7 +48,7 @@ Satellite is an opinionated auxilliary microservice for [LANraragi](https://gith
 
 This program is intended to run as a containerized web server, with cron jobs calling its APIs to perform (potentially very expensive) background tasks periodically.
 
-## Usage
+### Usage
 Build the image:
 ```sh
 docker build -t satellite --build-arg SATELLITE_GIT_COMMIT_HASH=$(git rev-parse HEAD) .
@@ -24,12 +59,13 @@ docker run -it --rm -p 127.0.0.1:8000:8000 satellite --host 0.0.0.0
 ```
 > **Note**: this is intended to be accessible only by the host machine, as it is a *privileged* server.
 
-Alternatively run the server locally from source for development:
+Alternatively run the server locally from source for development, after building from source:
 ```sh
-uvicorn satellite.app:app --host 0.0.0.0 --port 8000 --reload
+pip install ".[satellite_server]"
+uvicorn satellite_server.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Example Docker Compose
+#### Example Docker Compose
 ```yaml
 services:
 
@@ -66,7 +102,7 @@ services:
       - 127.0.0.1:8000:8000
 ```
 
-### API Usage Examples
+#### API Usage Examples
 Example of calling the API to perform tasks via curl. Assume that API key is "satellite", host is localhost, and port is 8000.
 
 Scan archives for corrupted images:
@@ -87,7 +123,7 @@ curl -X POST -H "Authorization: Bearer satellite" http://localhost:8000/api/uplo
 ```
 If archives are folders (like from PixivUtil2), add a `?archive_is_dir=true` query parameter at the end.
 
-## Configuration
+### Configuration
 Satellite configuration is environment variable-driven.
 
 | key | description | default |
@@ -104,10 +140,7 @@ Satellite configuration is environment variable-driven.
 | - | - | - |
 | `UPLOAD_DIR` | Directory to upload from. | |
 
-## Development
-Requirements: Python, Docker
-
-## Architecture
+### Architecture
 
 Although this can be run on the host with Python, this is a *Docker server-first* repository for the following reasons:
 - be able to run the tasks periodically using cron
@@ -127,3 +160,61 @@ No accommodations shall be made for choice: the user has only **one** way to do 
 Bind mounts are the choice of mounting any host contents into the server.
 
 `satellite` is a FastAPI web server. It connects to LANraragi and uploads files asynchronously using aiohttp, and to database using aiosqlite.
+
+## LANraragi Python SDK
+A basic Python SDK for LANraragi. Includes miscellaneous utilities, such as calculating upload checksum for a file, computing archive ID, and calculating and validating an archive's magic number.
+
+### Make Asynchronous API calls
+Usage of LRRClient: an asynchronous API client for LANraragi:
+```python
+import asyncio
+from lanraragi.client import LRRClient
+
+client = LRRClient(lrr_host="http://localhost:3000", lrr_api_key="lanraragi")
+
+async def main():
+    response = await client.get_server_info()
+    print(response)
+
+asyncio.run(main())
+```
+See the implementation for more details.
+
+## ManyCBZ
+
+Synthetic archive generation tool, intended mainly for testing purposes and making bugs involving large LRR repositories more accessible and reproducible. No more bug reports with censored screenshots, or worrying about TOS when testing on cloud instances!
+
+> ManyCBZ uses the [Roboto Regular](src/manycbz/resources/fonts/Roboto/Roboto-Regular.ttf) font under the [Apache 2.0 License](src/manycbz/resources/fonts/Roboto/LICENSE.txt).
+
+### Usage
+Create a test page:
+```python
+from manycbz.page import Page
+page = Page(1280, 1780)
+page.whiten_panel()
+page.add_panel_boundary()
+page.write_text('test text')
+page.save("test.png")
+```
+We can also produce a corrupted image:
+```python
+from manycbz.page import Page
+page = Page(1280, 1780, first_n_bytes=1000)
+page.save("test-corrupted-image.png")
+```
+
+Create a test comic:
+```python
+from manycbz.comic import create_comic
+create_comic("test.cbz", "test-comic", 1280, 1780, 55)
+```
+By default, `create_comic` creates zip files, but it can be used to create tar.gz files or folders instead:
+```python
+from manycbz.comic import create_comic
+from manycbz.enums import ArchivalStrategyEnum
+
+create_comic("test.tar.gz", "test-comic", 1280, 1780, 55, archival_strategy=ArchivalStrategyEnum.TAR_GZ)
+create_comic("test-comic", "test-comic", 1280, 1780, 55, archival_strategy=ArchivalStrategyEnum.NO_ARCHIVE)
+```
+
+**Notes on testing**: haven't found a good way to test image creation, this appears to be OS dependent.

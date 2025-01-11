@@ -3,7 +3,8 @@
 export MY_UID=$(id -u)
 export MY_GID=$(id -g)
 mkdir -p integration/contents
-docker compose -f integration/docker-compose.yml --profile lanraragi up --remove-orphans --build -d
+mkdir -p integration/satellite
+docker compose -f integration/docker-compose.yml --profile lanraragi --profile satellite up --remove-orphans --build -d
 
 # add "lanraragi" API key.
 docker exec -it redis bash -c "redis-cli <<EOF
