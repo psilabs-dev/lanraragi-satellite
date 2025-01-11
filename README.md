@@ -1,6 +1,6 @@
 # lanraragi-satellite
 
-A Python library that provides an auxilliary microservice (satellite) for LANraragi, among other utilities that might be useful.
+A Python library that provides an auxilliary microservice (satellite) for LANraragi, among other utilities that might be useful. Features are developed on an ad hoc basis, rather than to conform to best practices.
 
 ## Libraries/Contents
 1. [Installation](#installation)
@@ -9,13 +9,33 @@ A Python library that provides an auxilliary microservice (satellite) for LANrar
 1. [ManyCBZ](#manycbz): synthetic archive generation toolkit
 
 ## Installation
-Requirements: Linux, Python and Docker. The server is intended to run only in a Docker container in production, but it can be developed locally as well.
+
+General installation instructions.
+
+### Requirements
+Requirements depend on the library being used, with Satellite Server intended for containerized production deployment. Generally, the following are required:
+
+- A recent version of Python,
+- Docker, if you are using Satellite Server, or want to spin up a test LRR server.
+
+Install the library from source:
+```sh
+pip install .
+```
+
+### Development
+Install developer tools:
 ```sh
 pip install ".[dev]"
 ```
+Run tests:
+```sh
+export CI=true
+pytest tests
+```
 
 ## Satellite Server
-Satellite is an opinionated auxilliary microservice for [LANraragi](https://github.com/Difegue/LANraragi) to perform various tasks, such as:
+Satellite is an opinionated auxilliary microservice* for [LANraragi](https://github.com/Difegue/LANraragi) to perform various tasks, such as:
 
 - **Archive Processing**: Scan for, and move or remove, corrupted (incomplete) Archives from the LRR contents folder.
     > RW access to the contents folder is required.
@@ -41,6 +61,7 @@ docker run -it --rm -p 127.0.0.1:8000:8000 satellite --host 0.0.0.0
 
 Alternatively run the server locally from source for development, after building from source:
 ```sh
+pip install ".[satellite_server]"
 uvicorn satellite_server.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -119,9 +140,6 @@ Satellite configuration is environment variable-driven.
 | - | - | - |
 | `UPLOAD_DIR` | Directory to upload from. | |
 
-### Development
-Requirements: Python, Docker
-
 ### Architecture
 
 Although this can be run on the host with Python, this is a *Docker server-first* repository for the following reasons:
@@ -150,7 +168,7 @@ A basic Python SDK for LANraragi. Includes miscellaneous utilities, such as calc
 Usage of LRRClient: an asynchronous API client for LANraragi:
 ```python
 import asyncio
-from lanraragi import LRRClient
+from lanraragi.client import LRRClient
 
 client = LRRClient(lrr_host="http://localhost:3000", lrr_api_key="lanraragi")
 
@@ -164,9 +182,9 @@ See the implementation for more details.
 
 ## ManyCBZ
 
-Synthetic archive generation tool, intended mainly for testing purposes and making bugs involving large LRR repositories more reproducible.
+Synthetic archive generation tool, intended mainly for testing purposes and making bugs involving large LRR repositories more accessible and reproducible. No more bug reports with censored screenshots, or worrying about TOS when testing on cloud instances!
 
-> ManyCBZ uses the [Roboto Regular](src/manycbz/resources/fonts/Roboto/Roboto-Regular.ttf) font to create text (see [LICENSE.txt](src/manycbz/resources/fonts/Roboto/LICENSE.txt)).
+> ManyCBZ uses the [Roboto Regular](src/manycbz/resources/fonts/Roboto/Roboto-Regular.ttf) font under the [Apache 2.0 License](src/manycbz/resources/fonts/Roboto/LICENSE.txt).
 
 ### Usage
 Create a test page:

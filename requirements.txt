@@ -1,9 +1,4 @@
 aiohttp>=3.10.10,<3.11.0
-aiorwlock==1.5.0
 aiosqlite==0.20.0
-bcrypt>=4.2.1,<5.0.0
-numpy>=2.1.0,<2.2.0
 pillow>=11.0.0,<12.0.0
 toml>=0.10.2,<0.11.0
-fastapi
-uvicorn[standard]

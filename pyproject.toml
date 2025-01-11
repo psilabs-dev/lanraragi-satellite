@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -17,9 +17,17 @@ dynamic = [
 ]
 
 [project.optional-dependencies]
+satellite_server = [
+    "aiorwlock              ==1.5.0",
+    "bcrypt                 >=4.2.1,    <5.0.0",
+    "fastapi",
+    "numpy                  >=2.1.0,    <2.2.0",
+    "uvicorn[standard]"
+]
+
 dev = [
-    "pytest>=8.0.0",
-    "tox>=4.23.0",
+    "pytest                 >=8.0.0",
+    "tox                    >=4.23.0",
     "ruff"
 ]
 

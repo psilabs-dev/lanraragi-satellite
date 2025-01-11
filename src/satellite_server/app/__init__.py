@@ -56,6 +56,11 @@ async def lifespan(_: FastAPI):
                 else:
                     logger.error("Failed to obtain server info from LRR due to connection issues.")
                     break
+    else:
+        logger.info("""
+                    No LANraragi server detected! Satellite will continue to perform tasks that do not require the server.
+                    To add a server, configure environment variables for LRR_HOST and LRR_API_KEY.
+""")
     
     message = f"""Satellite is configured!
 

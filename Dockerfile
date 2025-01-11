@@ -11,7 +11,7 @@ COPY src/lanraragi          /workdir/src/lanraragi
 COPY src/satellite_server   /workdir/src/satellite_server
 COPY pyproject.toml         /workdir/pyproject.toml
 
-RUN pip3 install .
+RUN pip3 install ".[satellite_server]"
 
 HEALTHCHECK CMD [ "curl", "127.0.0.1:8000/api/healthcheck" ]
 ENTRYPOINT [ "uvicorn", "satellite_server.app:app" ]
