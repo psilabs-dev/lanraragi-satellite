@@ -4,9 +4,9 @@ A Python library that provides an auxilliary microservice (satellite) for LANrar
 
 ## Libraries/Contents
 1. [Installation](#installation)
-1. [Satellite Server](#satellite-server): multi-purpose, opinionated server
-1. [LANraragi Python SDK](#lanraragi-python-sdk): includes an async LANraragi API client
-1. [ManyCBZ](#manycbz): synthetic archive generation toolkit
+1. [Satellite Server](#satellite-server): multi-purpose, opinionated server for auxilliary tasks
+1. [LANraragi Python SDK](#lanraragi-python-sdk): Python SDK for LANraragi with async API client
+1. [ManyCBZ (in testing)](#manycbz): mock archive generation toolkit
 
 ## Installation
 
@@ -182,35 +182,40 @@ See the implementation for more details.
 
 ## ManyCBZ
 
-Synthetic archive generation tool, intended mainly for testing purposes and making bugs involving large LRR repositories more accessible and reproducible. No more bug reports with censored screenshots, or worrying about TOS when testing on cloud instances!
+Mock archive and metadata generation tool, intended mainly for testing purposes and making bugs involving large LRR repositories more accessible and reproducible. No more bug reports with censored screenshots, or worrying about TOS when testing on cloud instances!
 
 > ManyCBZ uses the [Roboto Regular](src/manycbz/resources/fonts/Roboto/Roboto-Regular.ttf) font under the [Apache 2.0 License](src/manycbz/resources/fonts/Roboto/LICENSE.txt).
 
-### Usage
+### Create Archives
 Create a test page:
 ```python
-from manycbz.page import Page
-page = Page(1280, 1780)
-page.whiten_panel()
-page.add_panel_boundary()
-page.write_text('test text')
-page.save("test.png")
+from pathlib import Path
+from manycbz.models import CreatePageRequest
+from manycbz.service.page import create_page, save_page_to_dir
+
+request = CreatePageRequest(1280, 1780, 'test.png', text='test text')
+page = create_page(request).page
+save_page_to_dir(page, Path('.'))
 ```
 We can also produce a corrupted image:
 ```python
-from manycbz.page import Page
-page = Page(1280, 1780, first_n_bytes=1000)
-page.save("test-corrupted-image.png")
+from pathlib import Path
+from manycbz.models import CreatePageRequest
+from manycbz.service.page import create_page, save_page_to_dir
+
+request = CreatePageRequest(1280, 1780, 'test.png', text='test text', first_n_bytes=1000)
+page = create_page(request).page
+save_page_to_dir(page, Path('.'))
 ```
 
 Create a test comic:
 ```python
-from manycbz.comic import create_comic
+from manycbz.service.archive import create_comic
 create_comic("test.cbz", "test-comic", 1280, 1780, 55)
 ```
 By default, `create_comic` creates zip files, but it can be used to create tar.gz files or folders instead:
 ```python
-from manycbz.comic import create_comic
+from manycbz.service.archive import create_comic
 from manycbz.enums import ArchivalStrategyEnum
 
 create_comic("test.tar.gz", "test-comic", 1280, 1780, 55, archival_strategy=ArchivalStrategyEnum.TAR_GZ)
@@ -218,3 +223,37 @@ create_comic("test-comic", "test-comic", 1280, 1780, 55, archival_strategy=Archi
 ```
 
 **Notes on testing**: haven't found a good way to test image creation, this appears to be OS dependent.
+
+### Create Tags
+In the context of metadata mocking, a key assumption on tag assignment for archives is independent and identical distribution (IID). This is mainly to simplify mocking implementations. 
+
+> It should be emphasized that IID does **not** hold in the real world, as many tags are highly correlated with each other. Nevertheless, IID is useful and often sufficient to generate mock test data where the distribution of tags across archives should resemble the real-world distribution.
+
+Thanks to this assumption, we can follow that any particular tag has a fixed probability of being assigned to any given archive, rather than a probability that is associated with external factors, such as the presence of other tags, etc. The result is that we can assign tags to an archive by simply providing tag names and assignment probabilities:
+
+```python
+from manycbz.service.metadata import TagGenerator, get_tag_assignments
+
+tg1 = TagGenerator('1', 1.0) # tag 1 with probability 1 of being assigned
+tg2 = TagGenerator('2', 1.0) # tag 2 with probability 1 of being assigned
+tg3 = TagGenerator('3', 0.0) # tag 3 with probability 0 of being assigned
+
+print(get_tag_assignments([tg1, tg2, tg3]))
+# ["1", "2"].
+```
+
+Then this can be automated to scale to, for example, create 10k tags via some probability mass function.
+```python
+import numpy as np
+from manycbz.service.metadata import create_tag_generators, get_tag_assignments
+
+# this is your probability mass function.
+def pmf(x):
+    return 1/10_000
+
+generator = np.random.default_rng(42)
+tag_generators = create_tag_generators(10_000, pmf)
+tags = get_tag_assignments(tag_generators, generator=generator)
+print(tags)
+# ['tag-7491']
+```

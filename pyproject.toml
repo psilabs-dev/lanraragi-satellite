@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "satellite"
-version = "1.1.1"
+version = "1.1.2"
 authors = [
     {name="psilabs-dev"}
 ]
 description = "A satellite server for LANraragi to perform various tasks."
 license = { file = "LICENSE" }
 readme = "README.md"
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.10, <3.14"
 dynamic = [
     "dependencies"
 ]
@@ -21,7 +21,6 @@ satellite_server = [
     "aiorwlock              ==1.5.0",
     "bcrypt                 >=4.2.1,    <5.0.0",
     "fastapi",
-    "numpy                  >=2.1.0,    <2.2.0",
     "uvicorn[standard]"
 ]
 

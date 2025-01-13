@@ -6,9 +6,10 @@ import zipfile
 
 import pytest
 
-from manycbz.comic import create_comic
+from manycbz.service.archive import create_comic
 from manycbz.enums import ArchivalStrategyEnum
-from manycbz.page import Page
+from manycbz.models import CreatePageRequest
+from manycbz.service.page import save_page_to_dir
 
 def calculate_sha1(path: Union[Path, str]):
     if isinstance(path, str):
@@ -31,13 +32,12 @@ def test_create_zip_archive():
 @pytest.mark.parametrize('comic_id, width, height, num_pages, page_id, page_name', test_create_zip_archive())
 def test_create_zip_archive(comic_id: str, width: int, height: int, num_pages: int, page_id: int, page_name: str):
     with tempfile.TemporaryDirectory() as tmpdir:
-        save_image_path = Path(tmpdir) / "expected-image.png"
-        expected_pg_1001 = Page(1200, 1700)
-        expected_pg_1001.whiten_panel()
-        expected_pg_1001.add_panel_boundary()
-        expected_pg_1001.write_text(f"{comic_id}-{page_name}")
-        expected_pg_1001.save(save_image_path)
-        expected_sha1 = calculate_sha1(save_image_path)
+
+        filename = 'expected-image.png'
+        save_dir = Path(tmpdir)
+        create_page_request = CreatePageRequest(width, height, 'expected-image.png', text=f"{comic_id}-{page_name}")
+        save_page_to_dir(create_page_request, save_dir)
+        expected_sha1 = calculate_sha1(save_dir / filename)
 
         save_zip_path = Path(tmpdir) / "output.zip"
         create_comic(save_zip_path, comic_id, width, height, num_pages, archival_strategy=ArchivalStrategyEnum.ZIP)

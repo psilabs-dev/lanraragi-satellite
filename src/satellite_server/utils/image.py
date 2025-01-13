@@ -13,24 +13,31 @@ def image_is_corrupted(image_path: str) -> bool:
 def image_is_corrupted(image_path: Path) -> bool:
     ...
 
-def image_is_corrupted(image_path: Union[Path, str]) -> bool:
+@overload
+def image_is_corrupted(image: Image.Image) -> bool:
+    ...
+
+def image_is_corrupted(image: Union[Image.Image, Path, str]) -> bool:
     """
     Quick-and-dirty method to check if an image is corrupted.
     """
-    if isinstance(image_path, str):
-        image_path = Path(image_path)
-    if not isinstance(image_path, Path):
-        raise TypeError(f"Unsupported image path type: {type(image_path)}")
+    if isinstance(image, Image.Image):
+        try:
+            np.asarray(image)
+            return False
+        except OSError: # this is thrown by numpy whenever we have a corrupted image.
+            return True
+
+    if isinstance(image, str):
+        image = Path(image)
+    if not isinstance(image, Path):
+        raise TypeError(f"Unsupported image path type: {type(image)}")
     
     # if the image has zero bytes, then we have a problem.
-    if image_path.stat().st_size == 0:
+    if image.stat().st_size == 0:
         return True
-    try:
-        image = Image.open(image_path)
-        np.asarray(image)
-        return False
-    except OSError: # this is thrown by numpy whenever we have a corrupted image.
-        return True
+    image = Image.open(image)
+    return image_is_corrupted(image)
 
 @overload
 def archive_contains_corrupted_image(archive_path: str) -> bool:
