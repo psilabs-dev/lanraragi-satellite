@@ -83,6 +83,7 @@ class WriteArchiveResponseStatus:
 class WriteArchiveResponse:
     status: WriteArchiveResponseStatus
     error: str
+    save_path: Path
 
 class TagGenerator:
     """

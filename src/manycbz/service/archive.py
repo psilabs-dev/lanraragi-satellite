@@ -1,10 +1,12 @@
 
 
 import logging
+import multiprocessing
 from pathlib import Path
 import tarfile
 import tempfile
-from typing import Union
+from typing import List, Union
+
 import zipfile
 from manycbz.enums import ArchivalStrategyEnum
 from manycbz.models import CreatePageRequest, WriteArchiveRequest, WriteArchiveResponse, WriteArchiveResponseStatus
@@ -34,6 +36,7 @@ def write_archive_to_disk(request: WriteArchiveRequest) -> WriteArchiveResponse:
             for create_page_request in create_page_requests:
                 save_page_to_dir(create_page_request, save_path)
             response.status = WriteArchiveResponseStatus.SUCCESS
+            response.save_path = save_path
             return response
         except Exception as e:
             response.status = WriteArchiveResponseStatus.FAILURE
@@ -51,6 +54,7 @@ def write_archive_to_disk(request: WriteArchiveRequest) -> WriteArchiveResponse:
             logger.error(f"Failed to write pages to disk due to error: {response.error}")
             return response
 
+        response.save_path = save_path
         if strategy == ArchivalStrategyEnum.ZIP:
             with zipfile.ZipFile(save_path, mode='w', compression=zipfile.ZIP_DEFLATED) as zipobj:
                 for path in tmp_save_dir.iterdir():
@@ -72,6 +76,16 @@ def write_archive_to_disk(request: WriteArchiveRequest) -> WriteArchiveResponse:
             return response
         else:
             raise NotImplementedError(f"The compression strategy is not implemented: {strategy.name}")
+
+def write_archives_to_disk(write_requests: List[WriteArchiveRequest]) -> List[WriteArchiveResponse]:
+    """
+    Write multiple archives to disk and return their responses with multiprocessing.
+    """
+    cpu_count = multiprocessing.cpu_count()
+    pool = multiprocessing.Pool(processes=cpu_count)
+    responses = pool.starmap(write_archive_to_disk, [(request,) for request in write_requests])
+    pool.close()
+    return responses
 
 def create_comic(output: Union[str, Path], comic_id: str, width: int, height: int, num_pages: int, archival_strategy: ArchivalStrategyEnum=ArchivalStrategyEnum.ZIP) -> WriteArchiveResponse:
     """
