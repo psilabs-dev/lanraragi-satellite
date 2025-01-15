@@ -2,11 +2,13 @@
 
 A Python library that provides an auxilliary microservice (satellite) for LANraragi, among other utilities that might be useful. Features are developed on an ad hoc basis, rather than to conform to best practices.
 
+Currently many of these libraries are lumped together for convenience, but may be split into individual components if they prove useful to others.
+
 ## Libraries/Contents
 1. [Installation](#installation)
 1. [Satellite Server](#satellite-server): multi-purpose, opinionated server for auxilliary tasks
 1. [LANraragi Python SDK](#lanraragi-python-sdk): Python SDK for LANraragi with async API client
-1. [ManyCBZ (in testing)](#manycbz): mock archive generation toolkit
+1. [ManyCBZ (in testing)](#manycbz): mock archive and metadata generation toolkit
 
 ## Installation
 
@@ -32,6 +34,22 @@ Run tests:
 ```sh
 export CI=true
 pytest tests
+```
+
+### LANraragi Docker Server Testing
+Set up a testing environment.
+```sh
+./integration/setup.sh
+```
+This will create a LRR server on port 3000, accompanied by a Redis server and a satellite server on port 8001. Additionally, this will inject "lanraragi" to Redis as the server API key, as well as provide a writable contents directory for Koyomi.
+
+Run API integration tests against this server:
+```sh
+pytest integration/tests
+```
+Clean up everything at the end:
+```sh
+./integration/teardown.sh
 ```
 
 ## Satellite Server
@@ -187,7 +205,7 @@ Mock archive and metadata generation tool, intended mainly for testing purposes 
 > ManyCBZ uses the [Roboto Regular](src/manycbz/resources/fonts/Roboto/Roboto-Regular.ttf) font under the [Apache 2.0 License](src/manycbz/resources/fonts/Roboto/LICENSE.txt).
 
 ### Create Archives
-Create a test page:
+Create a test page with resolution 1280x1780 and text "test text", and save it at "./test.png":
 ```python
 from pathlib import Path
 from manycbz.models import CreatePageRequest
@@ -197,7 +215,7 @@ request = CreatePageRequest(1280, 1780, 'test.png', text='test text')
 page = create_page(request).page
 save_page_to_dir(page, Path('.'))
 ```
-We can also produce a corrupted image:
+We can also produce a corrupted image, which occurs when an image download is interrupted:
 ```python
 from pathlib import Path
 from manycbz.models import CreatePageRequest
@@ -208,7 +226,7 @@ page = create_page(request).page
 save_page_to_dir(page, Path('.'))
 ```
 
-Create a test comic:
+Create a 55-page ZIP archive called "test.cbz" with text "test-comic-pg-$PAGE_NUMBER, where the page dimension is 1280x1780:
 ```python
 from manycbz.service.archive import create_comic
 create_comic("test.cbz", "test-comic", 1280, 1780, 55)
@@ -221,6 +239,7 @@ from manycbz.enums import ArchivalStrategyEnum
 create_comic("test.tar.gz", "test-comic", 1280, 1780, 55, archival_strategy=ArchivalStrategyEnum.TAR_GZ)
 create_comic("test-comic", "test-comic", 1280, 1780, 55, archival_strategy=ArchivalStrategyEnum.NO_ARCHIVE)
 ```
+For greater control use `write_archive_to_disk`, which `create_comic` is based on.
 
 **Notes on testing**: haven't found a good way to test image creation, this appears to be OS dependent.
 
@@ -234,9 +253,9 @@ Thanks to this assumption, we can follow that any particular tag has a fixed pro
 ```python
 from manycbz.service.metadata import TagGenerator, get_tag_assignments
 
-tg1 = TagGenerator('1', 1.0) # tag 1 with probability 1 of being assigned
-tg2 = TagGenerator('2', 1.0) # tag 2 with probability 1 of being assigned
-tg3 = TagGenerator('3', 0.0) # tag 3 with probability 0 of being assigned
+tg1 = TagGenerator('1', 1.0) # tag "1" with probability 1 of being assigned
+tg2 = TagGenerator('2', 1.0) # tag "2" with probability 1 of being assigned
+tg3 = TagGenerator('3', 0.0) # tag "3" with probability 0 of being assigned
 
 print(get_tag_assignments([tg1, tg2, tg3]))
 # ["1", "2"].
