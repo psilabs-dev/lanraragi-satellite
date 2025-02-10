@@ -1,5 +1,5 @@
-integration/contents/
-integration/satellite/
+staging/contents/
+staging/satellite/
 
 # ---> Python
 # Byte-compiled / optimized / DLL files

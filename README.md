@@ -36,21 +36,38 @@ export CI=true
 pytest tests
 ```
 
-### LANraragi Docker Server Testing
-Set up a testing environment.
+### LANraragi Staging Environment
+Set up a staging environment.
 ```sh
-./integration/setup.sh
+./staging/setup.sh
 ```
 This will create a LRR server on port 3000, accompanied by a Redis server and a satellite server on port 8001. Additionally, this will inject "lanraragi" to Redis as the server API key, as well as provide a writable contents directory for Koyomi.
 
-Run API integration tests against this server:
-```sh
-pytest integration/tests
-```
 Clean up everything at the end:
 ```sh
-./integration/teardown.sh
+./staging/teardown.sh
 ```
+
+### LANraragi Integration Tests
+Integration tests are located in the `./integration-tests` directory. A Docker engine is required. Integration tests are run with Pytest sessions. A LANraragi and Redis container will be spun up and torn down via the Python Docker client on each session, ensuring isolated testing environments.
+
+Start integration tests with the `difegue/lanraragi` image:
+```sh
+export CI=true
+pytest integration-tests
+```
+Start integration tests with another image:
+```sh
+pytest integration-tests --image custom-lrr-image
+```
+
+Start integration tests that build and deploy a local LANraragi git repo:
+```sh
+export CI=true
+pytest integration-tests --build /path/to/lanraragi/project
+```
+
+**Note**: Proper configuration of Docker and its availability to Python clients is expected to avoid exceptions during test-time. Troubleshooting such exceptions is beyond the scope of the project.
 
 ## Satellite Server
 Satellite is an opinionated auxilliary microservice* for [LANraragi](https://github.com/Difegue/LANraragi) to perform various tasks, such as:

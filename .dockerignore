@@ -1,3 +1,6 @@
+# Ignore testing modules
+src/lanraragi/docker_testing
+
 # Git
 .git
 .gitignore
