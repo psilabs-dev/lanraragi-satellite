@@ -1,0 +1,3 @@
+
+class DockerTestException(Exception):
+    pass

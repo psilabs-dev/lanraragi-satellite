@@ -482,6 +482,57 @@ class LRRClient:
                 logger.error("[delete_category] Failed to decode JSON response: ", content_type_error)
             return response
 
+    async def get_bookmark_link(self) -> LanraragiResponse:
+        """
+        `GET /api/categories/bookmark_link`
+        """
+        url = f"{self.lrr_host}/api/categories/bookmark_link"
+        response = LanraragiResponse()
+        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+            response.status_code = async_response.status
+            response.success = 1 if async_response.status == 200 else 0
+            try:
+                data = await async_response.json()
+                for key in data:
+                    response.__setattr__(key, data[key])
+            except aiohttp.client_exceptions.ContentTypeError as content_type_error:
+                logger.error("[get_bookmark_link] Failed to decode JSON response: ", content_type_error)
+            return response
+
+    async def update_bookmark_link(self, category_id: str) -> LanraragiResponse:
+        """
+        `PUT /api/categories/bookmark_link/:id`
+        """
+        url = f"{self.lrr_host}/api/categories/bookmark_link/{category_id}"
+        response = LanraragiResponse()
+        async with aiohttp.ClientSession() as session, session.put(url=url, headers=self.headers) as async_response:
+            response.status_code = async_response.status
+            response.success = 1 if async_response.status == 200 else 0
+            try:
+                data = await async_response.json()
+                for key in data:
+                    response.__setattr__(key, data[key])
+            except aiohttp.client_exceptions.ContentTypeError as content_type_error:
+                logger.error("[update_bookmark_link] Failed to decode JSON response: ", content_type_error)
+            return response
+
+    async def remove_bookmark_link(self):
+        """
+        `DELETE /api/categories/bookmark_link`
+        """
+        url = f"{self.lrr_host}/api/categories/bookmark_link"
+        response = LanraragiResponse()
+        async with aiohttp.ClientSession() as session, session.delete(url=url, headers=self.headers) as async_response:
+            response.status_code = async_response.status
+            response.success = 1 if async_response.status == 200 else 0
+            try:
+                data = await async_response.json()
+                for key in data:
+                    response.__setattr__(key, data[key])
+            except aiohttp.client_exceptions.ContentTypeError as content_type_error:
+                logger.error("[remove_bookmark_link] Failed to decode JSON response: ", content_type_error)
+            return response
+
     # ---- END CATEGORY API ----
 
     # ---- START SHINOBU API ----

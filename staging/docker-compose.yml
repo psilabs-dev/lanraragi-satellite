@@ -1,8 +1,8 @@
 services:
 
-  redis:
+  staging-redis:
     image: redis:7.2
-    container_name: redis
+    container_name: staging-redis
     profiles:
       - lanraragi
     restart: unless-stopped
@@ -12,32 +12,32 @@ services:
       test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
       start_period: 10s
 
-  lanraragi:
+  staging-lanraragi:
     image: difegue/lanraragi
-    container_name: lanraragi
+    container_name: staging-lanraragi
     profiles:
       - lanraragi
     restart: unless-stopped
     ports:
       - 3000:3000
     environment:
-      - "LRR_REDIS_ADDRESS=redis:6379"
+      - "LRR_REDIS_ADDRESS=staging-redis:6379"
       - LRR_UID=${MY_UID}
       - LRR_GID=${MY_GID}
     volumes:
       - ./contents:/home/koyomi/lanraragi/content:rw
     depends_on:
-      redis:
+      staging-redis:
         condition: service_healthy
 
-  satellite:
+  staging-satellite:
     build: ../
-    container_name: satellite
+    container_name: staging-satellite
     profiles:
       - satellite
     user: ${MY_UID}:${MY_GID}
     depends_on:
-      - lanraragi
+      - staging-lanraragi
     command: [ "--host", "0.0.0.0" ]
     ports:
       - 127.0.0.1:8001:8000 # use 8001; 8000 is reserved for local dev build of satellite.
