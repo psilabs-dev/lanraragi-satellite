@@ -7,6 +7,7 @@ Currently many of these libraries are lumped together for convenience, but may b
 ## Libraries/Contents
 1. [Installation](#installation)
 1. [Satellite Server](#satellite-server): multi-purpose, opinionated server for auxilliary tasks
+1. [Satellite NHDD](#satellite-nhdd): nHentai DeDuplication server
 1. [LANraragi Python SDK](#lanraragi-python-sdk): Python SDK for LANraragi with async API client
 1. [ManyCBZ (in testing)](#manycbz): mock archive and metadata generation toolkit
 
@@ -196,6 +197,25 @@ Bind mounts are the choice of mounting any host contents into the server.
 
 `satellite` is a FastAPI web server. It connects to LANraragi and uploads files asynchronously using aiohttp, and to database using aiosqlite.
 
+## Satellite NHDD
+An nHentai doujin deduplication library wrapped with server functionality. Uses Pytorch [img2vec](https://github.com/psilabs-dev/img2vec) with the resnet 18 model for image similarity in conjunction with a Postgres vector database.
+
+Install:
+```
+pip install ".[nhdd,server]"
+```
+
+### Sequence Deduplication Theory
+Deduplication is the task of identifying and removing duplicates. To identify duplicates, we need an algorithm to group items into buckets. To remove duplicates, we need an algorithm to impose an order on items within every bucket.
+
+(*Lesser* and *equal* duplicates) An archive is a finite sequence of images. Every image has a vector representation by an image embedding model. Then, archives are representations of sequences of vectors. We can define one archive being a "lesser duplicate" of another if its representation is a proper subsequence of the other, and "equal duplicate" if both representations are exactly equal. However, this condition is too strong: it's rare to find two images which are *exactly* equal. So we change this condition to mean "similar to some degree". This similarity is represented by cosine similarity and is good enough for practical purposes.
+
+Additionally, two archives are "not comparable" if neither is a subsequence of the other. "Not comparable" also means they lie in separate graphs. Archives which are not comparable with any other archive are "unique". Note the obvious result that equal-duplicates are not proper subsequences of each other.
+
+The relation "is a lesser duplicate of" imposes a partial order "<" on the set of equivalence classes of equal-duplicate archives. It guarantees that any archive which is not maximal is a lesser duplicate. It also states that remaining archives, which belong in maximal vertices, are either unique or have equal duplicates. 
+
+Metadata scoring: Equal duplicates cannot be removed by analyzing image content: to remove them, we may impose a finer ordering via metadata sorting or scoring.
+
 ## LANraragi Python SDK
 A basic Python SDK for LANraragi. Includes miscellaneous utilities, such as calculating upload checksum for a file, computing archive ID, and calculating and validating an archive's magic number.
 
@@ -205,11 +225,10 @@ Usage of LRRClient: an asynchronous API client for LANraragi:
 import asyncio
 from lanraragi.client import LRRClient
 
-client = LRRClient(lrr_host="http://localhost:3000", lrr_api_key="lanraragi")
-
 async def main():
-    response = await client.get_server_info()
-    print(response)
+    async with LRRClient(lrr_host="http://localhost:3000", lrr_api_key="lanraragi"):
+        response = await client.get_server_info()
+        print(response)
 
 asyncio.run(main())
 ```

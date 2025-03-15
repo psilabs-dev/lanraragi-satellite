@@ -4,26 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "satellite"
-version = "1.2.0"
+version = "1.3.0"
 authors = [
     {name="psilabs-dev"}
 ]
 description = "A satellite server for LANraragi to perform various tasks."
 license = { file = "LICENSE" }
 readme = "README.md"
-requires-python = ">=3.10, <3.14"
+requires-python = ">=3.12, <3.14"
 dynamic = [
     "dependencies"
 ]
 
 [project.optional-dependencies]
-satellite_server = [
-    "aiorwlock              ==1.5.0",
-    "bcrypt                 >=4.2.1,    <5.0.0",
-    "fastapi",
-    "uvicorn[standard]"
-]
-
+# developer dependencies
 dev = [
     "docker",
     "gitpython",
@@ -33,6 +27,24 @@ dev = [
     "tox                    >=4.23.0",
     "ruff"
 ]
+
+# nhentai archive deduplication dependencies
+nhdd = [
+    "pgvector",
+    "psycopg[binary]",
+]
+
+# satellite server dependencies
+server = [
+    "aiorwlock              ==1.5.0",
+    "bcrypt                 >=4.2.1,    <5.0.0",
+    "fastapi[standard]",
+    "python-dotenv",
+    "uvicorn[standard]"
+]
+
+[project.scripts]
+satellite = "satellite.commands:execute_command"
 
 [project.urls]
 Homepage = "https://github.com/psilabs-dev/lanraragi-satellite"
@@ -60,7 +72,7 @@ target-version = "py310"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["lanraragi*", "manycbz*", "satellite_server*"]
+include = ["common*", "lanraragi*", "manycbz*", "satellite*"]
 
 [tool.setuptools.package-data]
 manycbz = ["*.txt", "*.ttf"]

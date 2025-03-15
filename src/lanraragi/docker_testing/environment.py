@@ -16,7 +16,7 @@ from lanraragi.docker_testing.exceptions import DockerTestException
 
 DEFAULT_REDIS_TAG = "redis:7.2.4"
 DEFAULT_LANRARAGI_TAG = "difegue/lanraragi"
-DEFAULT_NETWORK_NAME = "default-network"
+DEFAULT_NETWORK_NAME = "lanraragi-integration-test-network"
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,6 +70,18 @@ class LRREnvironment:
                     self.logger.info(stream.strip())
         else:
             self.docker_client.images.build(path=build_path, dockerfile=dockerfile_path, tag='lanraragi-integration-test')
+
+    def add_api_key(self):
+        return self.redis_container.exec_run(["bash", "-c", 'redis-cli <<EOF\nSELECT 2\nHSET LRR_CONFIG apikey lanraragi\nEOF'])
+
+    def enable_nofun_mode(self):
+        return self.redis_container.exec_run(["bash", "-c", 'redis-cli <<EOF\nSELECT 2\nHSET LRR_CONFIG nofunmode 1\nEOF'])
+
+    def disable_nofun_mode(self):
+        return self.redis_container.exec_run(["bash", "-c", 'redis-cli <<EOF\nSELECT 2\nHSET LRR_CONFIG nofunmode 0\nEOF'])
+    
+    def allow_uploads(self):
+        return self.lrr_container.exec_run(["sh", "-c", 'chown -R koyomi: content'])
 
     def setup(self):
         # prepare images
@@ -157,15 +169,15 @@ class LRREnvironment:
                     raise DockerTestException("Failed to connect to the LRR server!", returncode=1)
 
         self.logger.debug("Running post-startup configuration.")
-        resp = self.redis_container.exec_run(["bash", "-c", 'redis-cli <<EOF\nSELECT 2\nHSET LRR_CONFIG apikey lanraragi\nEOF'])
+        resp = self.add_api_key()
         if resp.exit_code != 0:
             self.reset_docker_test_env()
             raise DockerTestException(f"Failed to add API key to server: {resp}")
-        resp = self.redis_container.exec_run(["bash", "-c", 'redis-cli <<EOF\nSELECT 2\nHSET LRR_CONFIG nofunmode 1\nEOF'])
+        resp = self.enable_nofun_mode()
         if resp.exit_code != 0:
             self.reset_docker_test_env()
             raise DockerTestException(f"Failed to enable nofunmode: {resp}")
-        resp = self.lrr_container.exec_run(["sh", "-c", 'chown -R koyomi: content'])
+        resp = self.allow_uploads()
         if resp.exit_code != 0:
             self.reset_docker_test_env()
             raise DockerTestException(f"Failed to modify permissions for LRR contents: {resp}")

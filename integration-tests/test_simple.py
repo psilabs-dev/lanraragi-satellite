@@ -9,10 +9,12 @@ import asyncio
 import logging
 from pathlib import Path
 import tempfile
-from typing import Generator, List
+from typing import List
 import docker
 import numpy as np
 import pytest
+import pytest_asyncio
+import aiohttp
 from lanraragi.client import LRRClient
 from lanraragi.docker_testing.environment import LRREnvironment
 from lanraragi.utils import compute_upload_checksum
@@ -41,9 +43,16 @@ def session_setup_teardown(request: pytest.FixtureRequest):
 def semaphore():
     yield asyncio.Semaphore(value=8)
 
-@pytest.fixture
-def lanraragi() -> Generator[LRRClient, None, None]:
-    yield LRRClient(lrr_host="http://localhost:3001", lrr_api_key="lanraragi")
+@pytest_asyncio.fixture
+async def lanraragi():
+    """
+    Provides a LRRClient for testing with proper async cleanup.
+    """
+    client = LRRClient(lrr_host="http://localhost:3001", lrr_api_key="lanraragi")
+    try:
+        yield client
+    finally:
+        await client.close()
 
 async def upload_archive(client: LRRClient, save_path: Path, filename: str, semaphore: asyncio.Semaphore, checksum: str=None, title: str=None, tags: str=None):
     async with semaphore:
@@ -120,7 +129,7 @@ async def test_archive_upload(lanraragi: LRRClient, semaphore: asyncio.Semaphore
 @pytest.mark.experimental
 async def test_category(lanraragi: LRRClient, semaphore: asyncio.Semaphore):
     """
-    Runs sanity tests against the category and highlight API.
+    Runs sanity tests against the category and bookmark link API.
 
     TODO: a more comprehensive test should be designed to verify that the first-time installation
     does not apply when a server is restarted. This should preferably be in a separate test module
@@ -133,11 +142,11 @@ async def test_category(lanraragi: LRRClient, semaphore: asyncio.Semaphore):
     assert len((await lanraragi.get_all_archives()).data) == 0, "Server contains archives!"
     # <<<<< TEST CONNECTION STAGE <<<<<
 
-    # >>>>> GET HIGHLIGHT >>>>>
+    # >>>>> GET BOOKMARK LINK >>>>>
     category_id = (await lanraragi.get_bookmark_link()).category_id
     category_name = (await lanraragi.get_category(category_id)).data.get("name")
-    assert category_name == 'Favorites', "Default highlight is not Favorites!"
-    # <<<<< GET HIGHLIGHT <<<<<
+    assert category_name == 'Favorites', "Bookmark is not linked to Favorites!"
+    # <<<<< GET BOOKMARK LINK <<<<<
 
     # >>>>> CREATE CATEGORY >>>>>
     static_cat_id = (await lanraragi.create_category("test-static-category")).category_id
@@ -149,21 +158,48 @@ async def test_category(lanraragi: LRRClient, semaphore: asyncio.Semaphore):
     assert (await lanraragi.get_category(static_cat_id)).data.get("name") == "test-static-category-changed", "Category ID name is incorrect after update!"
     # <<<<< UPDATE CATEGORY <<<<<
 
-    # >>>>> UPDATE HIGHLIGHT >>>>>
-    assert (await lanraragi.update_bookmark_link(static_cat_id)).status_code == 200, "Updating highlight was not success"
-    assert (await lanraragi.update_bookmark_link(dynamic_cat_id)).status_code == 400, "Assigning highlight to dynamic category should not be possible!"
-    assert (await lanraragi.get_bookmark_link()).category_id == static_cat_id, "Highlight after category update is incorrect!"
-    # <<<<< UPDATE HIGHLIGHT <<<<<
+    # >>>>> UPDATE BOOKMARK LINK >>>>>
+    assert (await lanraragi.update_bookmark_link(static_cat_id)).status_code == 200, "Updating bookmark link was not success"
+    assert (await lanraragi.update_bookmark_link(dynamic_cat_id)).status_code == 400, "Assigning bookmark link to dynamic category should not be possible!"
+    assert (await lanraragi.get_bookmark_link()).category_id == static_cat_id, "Bookmark link after category update is incorrect!"
+    # <<<<< UPDATE BOOKMARK LINK <<<<<
 
-    # >>>>> DELETE HIGHLIGHT >>>>>
+    # >>>>> DELETE BOOKMARK LINK >>>>>
     await lanraragi.remove_bookmark_link()
     assert not (await lanraragi.get_bookmark_link()).category_id
-    # <<<<< DELETE HIGHLIGHT <<<<<
+    # <<<<< DELETE BOOKMARK LINK <<<<<
 
-    # >>>>> DELETE HIGHLIGHTED CATEGORY >>>>>
+    # >>>>> UNLINK BOOKMARK >>>>>
     static_cat_id_2 = (await lanraragi.create_category("test-static-category-2")).category_id
-    assert (await lanraragi.update_bookmark_link(static_cat_id_2)).status_code == 200, "Updating highlight was not success"
-    assert (await lanraragi.get_bookmark_link()).category_id == static_cat_id_2, "Highlight after category update is incorrect!"
-    assert (await lanraragi.delete_category(static_cat_id_2)).status_code == 200, "Failed to delete highlighted category!"
-    assert not (await lanraragi.get_bookmark_link()).category_id, "Deleting a highlighted category should remove highlight!"
-    # <<<<< DELETE HIGHLIGHTED CATEGORY <<<<<
+    assert (await lanraragi.update_bookmark_link(static_cat_id_2)).status_code == 200, "Updating bookmark link was not success"
+    assert (await lanraragi.get_bookmark_link()).category_id == static_cat_id_2, "Bookmark link after category update is incorrect!"
+    assert (await lanraragi.delete_category(static_cat_id_2)).status_code == 200, "Failed to unlink bookmark!"
+    assert not (await lanraragi.get_bookmark_link()).category_id, "Deleting a category linked to bookmark should unlink bookmark!"
+    # <<<<< UNLINK BOOKMARK <<<<<
+
+@pytest.mark.asyncio
+async def test_concurrent_clients():
+    """
+    Example test that shows how to use multiple client instances
+    with a shared session for better performance.
+    """
+    session = aiohttp.ClientSession()
+    try:
+        client1 = LRRClient(
+            lrr_host="http://localhost:3001", 
+            lrr_api_key="lanraragi", 
+            session=session
+        )
+        client2 = LRRClient(
+            lrr_host="http://localhost:3001", 
+            lrr_api_key="lanraragi", 
+            session=session
+        )
+        results = await asyncio.gather(
+            client1.get_server_info(),
+            client2.get_all_categories()
+        )
+        assert results[0].status_code == 200
+        assert results[1].status_code == 200
+    finally:
+        await session.close()

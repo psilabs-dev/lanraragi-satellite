@@ -3,9 +3,6 @@ services:
   staging-redis:
     image: redis:7.2
     container_name: staging-redis
-    profiles:
-      - lanraragi
-    restart: unless-stopped
     ports:
       - 127.0.0.1:6379:6379
     healthcheck:
@@ -13,11 +10,8 @@ services:
       start_period: 10s
 
   staging-lanraragi:
-    image: difegue/lanraragi
+    image: staging-lanraragi
     container_name: staging-lanraragi
-    profiles:
-      - lanraragi
-    restart: unless-stopped
     ports:
       - 3000:3000
     environment:
@@ -30,23 +24,35 @@ services:
       staging-redis:
         condition: service_healthy
 
-  staging-satellite:
-    build: ../
-    container_name: staging-satellite
-    profiles:
-      - satellite
-    user: ${MY_UID}:${MY_GID}
-    depends_on:
-      - staging-lanraragi
-    command: [ "--host", "0.0.0.0" ]
+  staging-nhdd-db:
+    image: pgvector/pgvector:pg17
+    shm_size: '1gb'
+    container_name: staging-nhdd-db
     ports:
-      - 127.0.0.1:8001:8000 # use 8001; 8000 is reserved for local dev build of satellite.
+      - 5432:5432
     environment:
-      - LRR_CONTENTS=/home/koyomi/lanraragi/content
-      - LRR_HOST=http://lanraragi:3000
-      - LRR_API_KEY=lanraragi
-      - CATAPULT_HOME=/workdir/catapult
-      - SATELLITE_API_KEY=satellite
-    volumes:
-      - ./contents:/home/koyomi/lanraragi/content:rw
-      - ./satellite:/.satellite:rw
+      - POSTGRES_PASSWORD=postgres
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    ports:
+      - 8080:8080
+
+  # staging-satellite:
+  #   image: staging-satellite
+  #   container_name: staging-satellite
+  #   command: [ "--host", "0.0.0.0" ]
+  #   # user: ${MY_UID}:${MY_GID}
+  #   # mem_limit: '4gb'
+  #   ports: 
+  #     - 8000:8000
+  #   environment:
+  #     - SATELLITE_DISABLE_API_KEY=true
+  #     - LRR_HOST=http://staging-lanraragi:3000
+  #     - LRR_API_KEY=lanraragi
+  #     - NHDD_DB=postgres
+  #     - NHDD_DB_HOST=staging-nhdd-db
+  #     - NHDD_DB_USER=postgres
+  #     - NHDD_DB_PASS=postgres
+  #     - NHDD_DEVICES=cpu
