@@ -19,6 +19,10 @@ class LanraragiArchiveMetadataResponse(LanraragiResponse):
     title: str
     tags: str
     summary: str
+    progress: int
+    lastreadtime: int
+    pagecount: int
+    isnew: bool
 
 class LanraragiArchiveDownloadResponse(LanraragiResponse):
 

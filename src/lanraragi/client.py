@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import overload, Union
 
+from common.client import AbstractAsyncHTTPContextClient
 from lanraragi.models import LanraragiArchiveDownloadResponse, LanraragiArchiveMetadataResponse, LanraragiResponse, LanraragiServerInfoResponse
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ def build_auth_header(lrr_api_key: str) -> str:
     bearer = base64.b64encode(lrr_api_key.encode(encoding='utf-8')).decode('utf-8')
     return f"Bearer {bearer}"
 
-class LRRClient:
+class LRRClient(AbstractAsyncHTTPContextClient):
     """
     An asynchronous HTTP client for making API calls to a LANraragi server.
 
@@ -29,9 +30,13 @@ class LRRClient:
             self,
             lrr_host: str=None,
             lrr_api_key: str=None,
+            session: Union[None, aiohttp.ClientSession]=None,
+            ssl: bool=True
     ):
         if not lrr_host:
             raise KeyError("No host found for LANraragi!")
+        if not lrr_host.startswith("https://") and not lrr_host.startswith("http://"):
+            raise ValueError(f"lrr_host {lrr_host} must specify HTTP protocol.")
         if not lrr_api_key:
             raise KeyError("No API key found for LANraragi!")
         lrr_headers = {}
@@ -40,6 +45,27 @@ class LRRClient:
 
         self.lrr_host = lrr_host
         self.headers = lrr_headers
+        super().__init__(session, ssl=ssl)
+
+    @classmethod
+    async def default_client(cls, session: Union[None, aiohttp.ClientSession]=None) -> "LRRClient":
+        """
+        Return the default LANraragi client by trying out local and global configuration targets.
+        """
+        import os
+        lrr_host = os.getenv("LRR_HOST", "http://localhost:3000")
+        lrr_api_key = os.getenv("LRR_API_KEY", "lanraragi")
+        return LRRClient(lrr_host=lrr_host, lrr_api_key=lrr_api_key, session=session)
+
+    def build_url(self, api) -> str:
+        """
+        Builds the LANraragi server URL.
+
+        Examples:
+        - `client.build_url("/api/search")`
+        - `client.build_url("/api/archives")`
+        """
+        return f"{self.lrr_host}{api}"
 
     # ---- START SEARCH API ----
     # https://sugoi.gitbook.io/lanraragi/api-documentation/search-api
@@ -47,7 +73,7 @@ class LRRClient:
         """
         `GET /api/search`
         """
-        url = f"{self.lrr_host}/api/search"
+        url = self.build_url("/api/search")
         response = LanraragiResponse()
         form_data = aiohttp.FormData(quote_fields=False)
         for key, value in [
@@ -60,7 +86,7 @@ class LRRClient:
             if value:
                 form_data.add_field(key, value)
 
-        async with aiohttp.ClientSession() as session, session.get(url=url, data=form_data, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, data=form_data, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -77,7 +103,7 @@ class LRRClient:
         """
         `GET /api/search/random`
         """
-        url = f"{self.lrr_host}/api/search/random"
+        url = self.build_url("/api/search/random")
         response = LanraragiResponse()
         form_data = aiohttp.FormData(quote_fields=False)
         for key, value in [
@@ -87,7 +113,7 @@ class LRRClient:
         ]:
             if value:
                 form_data.add_field(key, value)
-        async with aiohttp.ClientSession() as session, session.get(url=url, data=form_data, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, data=form_data, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -100,9 +126,9 @@ class LRRClient:
         """
         `DELETE /api/search/cache`
         """
-        url = f"{self.lrr_host}/api/search/cache"
+        url = self.build_url("/api/search/cache")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.delete(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).delete(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -121,9 +147,9 @@ class LRRClient:
         """
         `GET /api/archives`
         """
-        url = f"{self.lrr_host}/api/archives"
+        url = self.build_url("/api/archives")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             response.data = await async_response.json()
@@ -133,9 +159,9 @@ class LRRClient:
         """
         `GET /api/archives/untagged`
         """
-        url = f"{self.lrr_host}/api/archives/untagged"
+        url = self.build_url("/api/archives/untagged")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             response.data = await async_response.json()
@@ -145,9 +171,9 @@ class LRRClient:
         """
         `GET /api/archives/:id/metadata`
         """
-        url = f"{self.lrr_host}/api/archives/{archive_id}/metadata"
+        url = self.build_url(f"/api/archives/{archive_id}/metadata")
         response = LanraragiArchiveMetadataResponse()
-        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -170,9 +196,9 @@ class LRRClient:
             writer.write(data.getvalue())
         ```
         """
-        url = f"{self.lrr_host}/api/archives/{archive_id}/download"
+        url = self.build_url(f"/api/archives/{archive_id}/download")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             buffer = io.BytesIO()
@@ -228,7 +254,7 @@ class LRRClient:
                     title=title, tags=tags, summary=summary, category_id=category_id
                 )
         elif isinstance(archive, io.IOBase):
-            url = f"{self.lrr_host}/api/archives/upload"
+            url = self.build_url("/api/archives/upload")
             response = LanraragiResponse()
             form_data = aiohttp.FormData(quote_fields=False)
             form_data.add_field('file', archive, filename=archive_filename, content_type='application/octet-stream')
@@ -242,7 +268,7 @@ class LRRClient:
                 form_data.add_field('summary', summary)
             if category_id:
                 form_data.add_field('category_id', category_id)
-            async with aiohttp.ClientSession() as session, session.put(url=url, data=form_data, headers=self.headers) as async_response:
+            async with (await self._get_session()).put(url=url, data=form_data, headers=self.headers) as async_response:
                 response.status_code = async_response.status
                 response.success = 1 if async_response.status == 200 else 0
                 try:
@@ -261,7 +287,7 @@ class LRRClient:
         `PUT /api/archives/:id/metadata`
         """
         if isinstance(tags, str):
-            url = f"{self.lrr_host}/api/archives/{archive_id}/metadata"
+            url = self.build_url(f"/api/archives/{archive_id}/metadata")
             response = LanraragiResponse()
             form_data = aiohttp.FormData(quote_fields=False)
             if title:
@@ -270,7 +296,7 @@ class LRRClient:
                 form_data.add_field('tags', tags)
             if summary:
                 form_data.add_field('summary', summary)
-            async with aiohttp.ClientSession() as session, session.put(url=url, headers=self.headers, data=form_data) as async_response:
+            async with (await self._get_session()).put(url=url, headers=self.headers, data=form_data) as async_response:
                 response.status_code = async_response.status
                 response.success = 1 if async_response.status == 200 else 0
                 try:
@@ -288,9 +314,9 @@ class LRRClient:
         """
         `DELETE /api/archives/:id`
         """
-        url = f"{self.lrr_host}/api/archives/{archive_id}"
+        url = self.build_url(f"/api/archives/{archive_id}")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.delete(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).delete(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -308,11 +334,11 @@ class LRRClient:
         """
         `GET /api/database/stats`
         """
-        url = f"{self.lrr_host}/api/database/stats"
+        url = self.build_url("/api/database/stats")
         response = LanraragiResponse()
         form_data = aiohttp.FormData(quote_fields=False)
         form_data.add_field('minweight', minweight)
-        async with aiohttp.ClientSession() as session, session.get(url=url, data=form_data, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, data=form_data, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -325,9 +351,9 @@ class LRRClient:
         """
         `POST /api/database/clean`
         """
-        url = f"{self.lrr_host}/api/database/clean"
+        url = self.build_url("/api/database/clean")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.post(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).post(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -342,9 +368,9 @@ class LRRClient:
         """
         `POST /api/database/drop`
         """
-        url = f"{self.lrr_host}/api/database/drop"
+        url = self.build_url("/api/database/drop")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.post(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).post(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -359,9 +385,9 @@ class LRRClient:
         """
         `GET /api/database/backup`
         """
-        url = f"{self.lrr_host}/api/database/backup"
+        url = self.build_url("/api/database/backup")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             response.data = await async_response.json()
@@ -371,9 +397,9 @@ class LRRClient:
         """
         `DELETE /api/database/isnew`
         """
-        url = f"{self.lrr_host}/api/database/isnew"
+        url = self.build_url("/api/database/isnew")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.delete(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).delete(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -392,9 +418,9 @@ class LRRClient:
         """
         `GET /api/categories`
         """
-        url = f"{self.lrr_host}/api/categories"
+        url = self.build_url("/api/categories")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -407,9 +433,9 @@ class LRRClient:
         """
         `GET /api/categories/:id`
         """
-        url = f"{self.lrr_host}/api/categories/{category_id}"
+        url = self.build_url(f"/api/categories/{category_id}")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -422,7 +448,7 @@ class LRRClient:
         """
         `PUT /api/categories`
         """
-        url = f"{self.lrr_host}/api/categories"
+        url = self.build_url("/api/categories")
         response = LanraragiResponse()
         form_data = aiohttp.FormData(quote_fields=False)
         form_data.add_field('name', name)
@@ -430,7 +456,7 @@ class LRRClient:
             form_data.add_field('search', search)
         if pinned:
             form_data.add_field('pinned', pinned)
-        async with aiohttp.ClientSession() as session, session.put(url=url, data=form_data, headers=self.headers) as async_response:
+        async with (await self._get_session()).put(url=url, data=form_data, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -445,7 +471,7 @@ class LRRClient:
         """
         `PUT /api/categories/:id`
         """
-        url = f"{self.lrr_host}/api/categories/{category_id}"
+        url = self.build_url(f"/api/categories/{category_id}")
         response = LanraragiResponse()
         form_data = aiohttp.FormData(quote_fields=False)
         if name:
@@ -454,7 +480,7 @@ class LRRClient:
             form_data.add_field('search', search)
         if pinned:
             form_data.add_field('pinned', pinned)
-        async with aiohttp.ClientSession() as session, session.put(url=url, data=form_data, headers=self.headers) as async_response:
+        async with (await self._get_session()).put(url=url, data=form_data, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -469,9 +495,9 @@ class LRRClient:
         """
         `DELETE /api/categories/:id`
         """
-        url = f"{self.lrr_host}/api/categories/{category_id}"
+        url = self.build_url(f"/api/categories/{category_id}")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.delete(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).delete(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -486,9 +512,9 @@ class LRRClient:
         """
         `GET /api/categories/bookmark_link`
         """
-        url = f"{self.lrr_host}/api/categories/bookmark_link"
+        url = self.build_url("/api/categories/bookmark_link")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -503,9 +529,9 @@ class LRRClient:
         """
         `PUT /api/categories/bookmark_link/:id`
         """
-        url = f"{self.lrr_host}/api/categories/bookmark_link/{category_id}"
+        url = self.build_url(f"/api/categories/bookmark_link/{category_id}")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.put(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).put(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -520,9 +546,9 @@ class LRRClient:
         """
         `DELETE /api/categories/bookmark_link`
         """
-        url = f"{self.lrr_host}/api/categories/bookmark_link"
+        url = self.build_url("/api/categories/bookmark_link")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.delete(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).delete(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -541,9 +567,9 @@ class LRRClient:
         """
         `GET /api/shinobu`
         """
-        url = f"{self.lrr_host}/api/shinobu"
+        url = self.build_url("/api/shinobu")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -558,9 +584,9 @@ class LRRClient:
         """
         `POST /api/shinobu/stop`
         """
-        url = f"{self.lrr_host}/api/shinobu/stop"
+        url = self.build_url("/api/shinobu/stop")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.post(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).post(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -575,9 +601,9 @@ class LRRClient:
         """
         `POST /api/shinobu/restart`
         """
-        url = f"{self.lrr_host}/api/shinobu/restart"
+        url = self.build_url("/api/shinobu/restart")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.post(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).post(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -596,9 +622,9 @@ class LRRClient:
         """
         `GET /api/info`
         """
-        url = f"{self.lrr_host}/api/info"
+        url = self.build_url("/api/info")
         response = LanraragiServerInfoResponse()
-        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -613,9 +639,9 @@ class LRRClient:
         """
         `GET /api/plugins/:type`
         """
-        url = f"{self.lrr_host}/api/plugins/{plugin_type}"
+        url = self.build_url(f"/api/plugins/{plugin_type}")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.get(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).get(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -628,7 +654,7 @@ class LRRClient:
         """
         `POST /api/plugins/use`
         """
-        url = f"{self.lrr_host}/api/plugins/use"
+        url = self.build_url("/api/plugins/use")
         query = f"?plugin={plugin}"
         if arcid:
             query += f"&id={arcid}"
@@ -637,7 +663,7 @@ class LRRClient:
         url = url + query
 
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.post(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).post(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             try:
                 response_obj = await async_response.json()
@@ -654,9 +680,9 @@ class LRRClient:
         """
         `DELETE /api/tempfolder`
         """
-        url = f"{self.lrr_host}/api/tempfolder"
+        url = self.build_url("/api/tempfolder")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.delete(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).delete(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:
@@ -671,9 +697,9 @@ class LRRClient:
         """
         `POST /api/regen_thumbs`
         """
-        url = f"{self.lrr_host}/api/regen_thumbs"
+        url = self.build_url("/api/regen_thumbs")
         response = LanraragiResponse()
-        async with aiohttp.ClientSession() as session, session.post(url=url, headers=self.headers) as async_response:
+        async with (await self._get_session()).post(url=url, headers=self.headers) as async_response:
             response.status_code = async_response.status
             response.success = 1 if async_response.status == 200 else 0
             try:

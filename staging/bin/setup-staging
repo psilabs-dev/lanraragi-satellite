@@ -1,0 +1,40 @@
+#!/bin/bash
+
+export MY_UID=$(id -u)
+export MY_GID=$(id -g)
+export LRR_STAGING_IMAGE="${LRR_STAGING_IMAGE:-difegue/lanraragi}"
+
+cd "$(dirname "$0")/.."
+mkdir -p contents
+
+# establish LRR docker image for a staging environment.
+if [ -n "$LRR_BUILD_TARGET" ]; then
+    if [ ! -e "$LRR_BUILD_TARGET" ]; then
+        echo "Error: $LRR_BUILD_TARGET does not exist." >&2
+        exit 1
+    fi
+    docker build -t staging-lanraragi -f $LRR_BUILD_TARGET/tools/build/docker/Dockerfile $LRR_BUILD_TARGET
+else
+    echo "Pulling image: $LRR_STAGING_IMAGE"
+    docker pull $LRR_STAGING_IMAGE
+    docker image tag $LRR_STAGING_IMAGE staging-lanraragi
+fi
+
+docker compose up --remove-orphans --build -d -y
+
+# add "lanraragi" API key.
+docker exec -it staging-redis bash -c "redis-cli <<EOF
+SELECT 2
+HSET LRR_CONFIG apikey lanraragi
+EOF"
+
+# enable nofun mode.
+docker exec -it staging-redis bash -c "redis-cli <<EOF
+SELECT 2
+HSET LRR_CONFIG nofunmode 1
+EOF"
+
+# allow uploads on bind mounts in linux.
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    docker exec -it staging-lanraragi /bin/sh -c "chown -R koyomi: content"
+fi

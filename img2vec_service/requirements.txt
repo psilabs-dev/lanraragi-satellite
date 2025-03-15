@@ -1,0 +1,3 @@
+fastapi[standard]
+img2vec-pytorch-2==1.3.0
+python-dotenv

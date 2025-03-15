@@ -1,0 +1,20 @@
+services:
+  img2vec-service:
+    build:
+      context: .
+      args:
+        - MODEL_NAME=resnet-18 # uncomment this to download model at build time
+    command: ["--host", "0.0.0.0"]
+    deploy:
+      replicas: 3
+
+  img2vec-proxy:
+    image: nginx:latest
+    container_name: img2vec-proxy
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - 18000:80
+    depends_on:
+      - img2vec-service
+    restart: always

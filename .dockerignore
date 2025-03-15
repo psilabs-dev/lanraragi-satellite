@@ -1,5 +1,6 @@
 # Ignore testing modules
 src/lanraragi/docker_testing
+src/manycbz
 
 # Git
 .git
