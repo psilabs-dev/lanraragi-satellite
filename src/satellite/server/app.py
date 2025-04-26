@@ -88,8 +88,11 @@ async def lifespan(_: FastAPI):
         try:
             nhdd_db = PostgresDatabaseService(config.NHDD_DB, config.NHDD_DB_USER, config.NHDD_DB_HOST, config.NHDD_DB_PASS, DEFAULT_EMBEDDING_DIMENSIONS)
             img2vec = Img2VecClient(config.IMG2VEC_HOST)
-            if not (await img2vec.get_healthcheck()):
-                raise ConnectionError("Failed to connect to img2vec service!")
+            try:
+                if not (await img2vec.get_healthcheck()):
+                    logger.error("Failed to connect to img2vec service! Img2vec service will not be available.")
+            except Exception as exception:
+                logger.error(f"Failed to connect to img2vec service! Img2vec service will not be available. {exception}")
             await nhdd_db.setup_database()
             message += f"""
                     NHDD Database:      {config.NHDD_DB_HOST} (PostgreSQL)"""

@@ -676,8 +676,7 @@ class PostgresDatabaseService:
                                                FROM nhentai_archive WHERE archive_id = %s
                                                ''', (archive_id,))).fetchone()
             if row:
-                row[3] = NhArchiveLanguage[row[3]]
-            return row
+                return (row[0], row[1], row[2], NhArchiveLanguage[row[3]], row[4])
 
     async def get_nhentai_archives_by_favorites(self, favorites: int, limit: int) -> List[Tuple[str, str, int, NhArchiveLanguage, float]]:
         """
@@ -1446,7 +1445,7 @@ class DeduplicationService:
         dndm_start = time.time()
 
         # step 1: update donotdownloadme file.
-        if not self.nhentai_archivist_dndm.exists():
+        if not self.nhentai_archivist_dndm or not self.nhentai_archivist_dndm.exists():
             raise FileNotFoundError("DONOTDOWNLOADME file not found!")
         duplicate_archive_ids = await self.get_duplicate_archives()
         lrr_sem = asyncio.Semaphore(value=lrr_concurrent_connections)
@@ -1469,7 +1468,7 @@ class DeduplicationService:
                         source = get_source_from_tags(tags)
                         if not source:
                             self.logger.warning(f"[{archive_id}] No source for tag!")
-                            return (archive_id, "Tags exist but have no source.")
+                            return (archive_id, "Tags exist but have no source.", None)
                         nhentai_id = source.split("/")[-1].strip()
                         if not nhentai_id.isdigit():
                             return (archive_id, f"nHentai ID is not valid digit: {nhentai_id}", None)
@@ -1491,9 +1490,11 @@ class DeduplicationService:
         with open(self.nhentai_archivist_dndm, 'r') as reader:
             nhentai_ids = reader.readlines()
         new_add_count = 0
+        self.logger.info(f"Found {len(results)} duplicate archives.")
+        self.logger.info("Adding to DONOTDOWNLOADME file...")
         for arcid, err, nhentai_id in results:
             if err:
-                ... # do something here?
+                self.logger.warning(f"[{arcid}] {err}")
                 continue
             if nhentai_id in nhentai_ids:
                 continue
@@ -1502,7 +1503,7 @@ class DeduplicationService:
                 new_add_count += 1
         if not is_dry_run:
             with open(self.nhentai_archivist_dndm, 'w') as writer:
-                writer.writelines(nhentai_ids)
+                writer.write("\n".join(nhentai_ids))
         dndm_time = time.time() - dndm_start
         self.logger.info(f"Added {new_add_count} duplicates to DONOTDOWNLOADME file.")
 
@@ -1514,6 +1515,7 @@ class DeduplicationService:
         contents_size_bytes = 0
         deleted_size_bytes = 0
         deleted_count = 0
+        self.logger.info("Deleting archives in contents directory...")
         for archive_path in all_archives:
             try:
                 name = archive_path.name.strip()
