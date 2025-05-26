@@ -8,9 +8,9 @@ from fastapi.concurrency import asynccontextmanager
 
 from lanraragi.client import LRRClient
 from satellite.server.dependencies.common import get_config
-from satellite.server.routers import archives, database, healthcheck, metadata, upload
-from satellite.service.nhdd import DEFAULT_EMBEDDING_DIMENSIONS, Img2VecClient, PostgresDatabaseService
+from satellite.server.routers import archives, database, healthcheck, metadata
 try:
+    from satellite.service.nhdd import DEFAULT_EMBEDDING_DIMENSIONS, Img2VecClient, PostgresDatabaseService
     from satellite.server.routers.nhdd import nhdd_router
 except ImportError:
     nhdd_router = None
@@ -125,7 +125,6 @@ app = FastAPI(
 app.include_router(archives.router)
 app.include_router(healthcheck.router)
 app.include_router(metadata.router)
-app.include_router(upload.router)
 app.include_router(database.router)
 if nhdd_router and get_config().get_is_nhdd_configured():
     logger.info("NHDD service is enabled.")

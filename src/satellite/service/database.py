@@ -20,7 +20,6 @@ class DatabaseService:
         if not self.db.parent.exists():
             self.db.parent.mkdir(parents=True, exist_ok=True)
         await self.create_archive_scan_table()
-        await self.create_archive_upload_table()
         await self.create_metadata_plugin_task_table()
         await self.create_auth_table()
 
@@ -308,83 +307,6 @@ class DatabaseService:
             try:
                 async with aiosqlite.connect(self.db) as conn:
                     await conn.execute("DROP TABLE IF EXISTS metadata_plugin_task")
-                    await conn.commit()
-                    return
-            except aiosqlite.OperationalError:
-                # this may happen if database is locked; in this case, 
-                # simply wait and try again.
-                time_to_sleep = 2 ** (retry_count + 1)
-                await asyncio.sleep(time_to_sleep)
-                continue
-
-    @staticmethod
-    def get_archive_upload_md5(archive_upload: Tuple[str, str, float]):
-        return archive_upload[0]
-    @staticmethod
-    def get_archive_upload_path(archive_upload: Tuple[str, str, float]):
-        return archive_upload[1]
-    @staticmethod
-    def get_archive_upload_mtime(archive_upload: Tuple[str, str, float]):
-        return archive_upload[2]
-
-    async def create_archive_upload_table(self):
-        async with aiosqlite.connect(self.db) as conn:
-            await conn.execute("""
-                               CREATE TABLE IF NOT EXISTS archive_upload (
-                               md5      VARCHAR(255)    PRIMARY KEY,
-                               path     TEXT,
-                               mtime    REAL)
-""")
-            await conn.commit()
-        return
-
-    async def update_archive_upload(self, md5: str, path: str, mtime: float):
-        retry_count = 0
-        while True:
-            try:
-                async with aiosqlite.connect(self.db) as conn:
-                    await conn.execute("""
-                                       INSERT OR IGNORE INTO archive_upload
-                                       (md5, path, mtime)
-                                       VALUES (?, ?, ?)
-                                       ON CONFLICT(md5) DO UPDATE SET
-                                       path     = excluded.path,
-                                       mtime    = excluded.mtime
-""", (md5, path, mtime))
-                    await conn.commit()
-                    return
-            except aiosqlite.OperationalError:
-                # this may happen if database is locked; in this case, 
-                # simply wait and try again.
-                time_to_sleep = 2 ** (retry_count + 1)
-                await asyncio.sleep(time_to_sleep)
-                continue
-
-    async def get_archive_upload_by_md5(self, md5: str) -> Union[Tuple[str, str, float], None]:
-        async with aiosqlite.connect(self.db) as conn, conn.execute("SELECT md5, path, mtime FROM archive_upload WHERE md5 = ?", (md5,)) as cursor:
-            return await cursor.fetchone()
-    
-    async def delete_archive_upload(self, md5: str):
-        retry_count = 0
-        while True:
-            try:
-                async with aiosqlite.connect(self.db) as conn:
-                    await conn.execute("DELETE FROM archive_upload WHERE md5 = ?", (md5,))
-                    await conn.commit()
-                    return
-            except aiosqlite.OperationalError:
-                # this may happen if database is locked; in this case, 
-                # simply wait and try again.
-                time_to_sleep = 2 ** (retry_count + 1)
-                await asyncio.sleep(time_to_sleep)
-                continue
-
-    async def drop_archive_upload_table(self):
-        retry_count = 0
-        while True:
-            try:
-                async with aiosqlite.connect(self.db) as conn:
-                    await conn.execute("DROP TABLE IF EXISTS archive_upload")
                     await conn.commit()
                     return
             except aiosqlite.OperationalError:

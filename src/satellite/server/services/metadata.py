@@ -70,6 +70,13 @@ async def update_metadata_from_plugin(
             await database.delete_metadata_plugin_task(arcid)
             logger.error(f"[metadata_plugin_{namespace}] Archive not found: {arcid}")
             return 0
+        
+        # if tags exist we can assume it has metadata and has OK status (even if the task does not exist)
+        # this way we can handle migrations between LANraragi servers without just re-calling all the APIs.
+        if (tags := archive_metadata.tags) and (any(tag.strip().startswith("source:") for tag in tags.strip().split(","))) and (title := archive_metadata.title) and (not retry_ok):
+            await database.update_metadata_plugin_task(arcid, source, namespace, MetadataPluginTaskStatus.OK.value, time.time(), 0)
+            logger.info(f"[metadata_plugin_{namespace}] Task [{task_i + 1}/{total_tasks}] OK (is tagged) {source} - {title}")
+            return 1
 
         # invoke plugin: follow-up with sleep.
         plugin_response = await lanraragi.use_plugin(namespace, arcid, source)
