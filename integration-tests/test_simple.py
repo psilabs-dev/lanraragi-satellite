@@ -126,7 +126,6 @@ async def test_archive_upload(lanraragi: LRRClient, semaphore: asyncio.Semaphore
     # <<<<< VALIDATE UPLOAD COUNT STAGE <<<<<
 
 @pytest.mark.asyncio
-@pytest.mark.experimental
 async def test_category(lanraragi: LRRClient, semaphore: asyncio.Semaphore):
     """
     Runs sanity tests against the category and bookmark link API.
@@ -145,7 +144,7 @@ async def test_category(lanraragi: LRRClient, semaphore: asyncio.Semaphore):
     # >>>>> GET BOOKMARK LINK >>>>>
     category_id = (await lanraragi.get_bookmark_link()).category_id
     category_name = (await lanraragi.get_category(category_id)).data.get("name")
-    assert category_name == 'Favorites', "Bookmark is not linked to Favorites!"
+    assert category_name == '🔖 Favorites', "Bookmark is not linked to \"🔖 Favorites\"!"
     # <<<<< GET BOOKMARK LINK <<<<<
 
     # >>>>> CREATE CATEGORY >>>>>
