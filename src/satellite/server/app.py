@@ -8,9 +8,9 @@ from fastapi.concurrency import asynccontextmanager
 
 from lanraragi.client import LRRClient
 from satellite.server.dependencies.common import get_config
-from satellite.server.routers import archives, database, healthcheck, metadata, upload
-from satellite.service.nhdd import DEFAULT_EMBEDDING_DIMENSIONS, Img2VecClient, PostgresDatabaseService
+from satellite.server.routers import archives, database, healthcheck, metadata
 try:
+    from satellite.service.nhdd import DEFAULT_EMBEDDING_DIMENSIONS, Img2VecClient, PostgresDatabaseService
     from satellite.server.routers.nhdd import nhdd_router
 except ImportError:
     nhdd_router = None
@@ -88,8 +88,11 @@ async def lifespan(_: FastAPI):
         try:
             nhdd_db = PostgresDatabaseService(config.NHDD_DB, config.NHDD_DB_USER, config.NHDD_DB_HOST, config.NHDD_DB_PASS, DEFAULT_EMBEDDING_DIMENSIONS)
             img2vec = Img2VecClient(config.IMG2VEC_HOST)
-            if not (await img2vec.get_healthcheck()):
-                raise ConnectionError("Failed to connect to img2vec service!")
+            try:
+                if not (await img2vec.get_healthcheck()):
+                    logger.error("Failed to connect to img2vec service! Img2vec service will not be available.")
+            except Exception as exception:
+                logger.error(f"Failed to connect to img2vec service! Img2vec service will not be available. {exception}")
             await nhdd_db.setup_database()
             message += f"""
                     NHDD Database:      {config.NHDD_DB_HOST} (PostgreSQL)"""
@@ -122,7 +125,6 @@ app = FastAPI(
 app.include_router(archives.router)
 app.include_router(healthcheck.router)
 app.include_router(metadata.router)
-app.include_router(upload.router)
 app.include_router(database.router)
 if nhdd_router and get_config().get_is_nhdd_configured():
     logger.info("NHDD service is enabled.")

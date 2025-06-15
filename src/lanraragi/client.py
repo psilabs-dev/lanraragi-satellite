@@ -507,6 +507,23 @@ class LRRClient(AbstractAsyncHTTPContextClient):
             except aiohttp.client_exceptions.ContentTypeError as content_type_error:
                 logger.error("[delete_category] Failed to decode JSON response: ", content_type_error)
             return response
+        
+    async def add_archive_to_category(self, category_id: str, archive_id: str) -> LanraragiResponse:
+        """
+        `PUT /api/categories/:id/:archive`
+        """
+        url = self.build_url(f"/api/categories/{category_id}/{archive_id}")
+        response = LanraragiResponse()
+        async with (await self._get_session()).put(url=url, headers=self.headers) as async_response:
+            response.status_code = async_response.status
+            response.success = 1 if async_response.status == 200 else 0
+            try:
+                data = await async_response.json()
+                for key in data:
+                    response.__setattr__(key, data[key])
+            except aiohttp.client_exceptions.ContentTypeError as content_type_error:
+                logger.error("[add_archive_to_category] Failed to decode JSON response: ", content_type_error)
+            return response
 
     async def get_bookmark_link(self) -> LanraragiResponse:
         """

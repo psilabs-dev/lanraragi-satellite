@@ -1,26 +1,90 @@
 #!/bin/bash
 
+NOFUNMODE=0
+BUILD_TARGET=""
+STAGING_IMAGE="difegue/lanraragi"
+BRANCH=""
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --nofunmode) NOFUNMODE=1 ;;
+        --build) 
+            if [ -n "$2" ]; then
+                BUILD_TARGET="$2"
+                shift
+            else
+                echo "Error: --build requires a path or URL argument" >&2
+                exit 1
+            fi
+            ;;
+        --image)
+            if [ -n "$2" ]; then
+                STAGING_IMAGE="$2"
+                shift
+            else
+                echo "Error: --image requires a docker image argument" >&2
+                exit 1
+            fi
+            ;;
+        -b|--branch)
+            if [ -n "$2" ]; then
+                BRANCH="$2"
+                shift
+            else
+                echo "Error: --branch requires a branch name" >&2
+                exit 1
+            fi
+            ;;
+        *) echo "Unknown parameter: $1" >&2; exit 1 ;;
+    esac
+    shift
+done
+
 export MY_UID=$(id -u)
 export MY_GID=$(id -g)
-export LRR_STAGING_IMAGE="${LRR_STAGING_IMAGE:-difegue/lanraragi}"
-
-cd "$(dirname "$0")/.."
-mkdir -p contents
 
 # establish LRR docker image for a staging environment.
-if [ -n "$LRR_BUILD_TARGET" ]; then
-    if [ ! -e "$LRR_BUILD_TARGET" ]; then
-        echo "Error: $LRR_BUILD_TARGET does not exist." >&2
-        exit 1
+if [ -n "$BUILD_TARGET" ]; then
+    if [[ "$BUILD_TARGET" == http://* || "$BUILD_TARGET" == https://* ]]; then
+        echo "Cloning repository from URL: $BUILD_TARGET"
+        ORIGINAL_DIR=$(pwd)
+        TEMP_DIR=$(mktemp -d)
+        cleanup() {
+            echo "Cleaning up temporary directory..."
+            cd "$ORIGINAL_DIR" 2>/dev/null
+            rm -rf "$TEMP_DIR"
+        }
+        trap cleanup EXIT
+        if [ -n "$BRANCH" ]; then
+            echo "Using branch: $BRANCH"
+            git clone --depth 1 --branch "$BRANCH" "$BUILD_TARGET" "$TEMP_DIR" || {
+                echo "Error: Failed to clone repository with branch $BRANCH" >&2
+                exit 1
+            }
+        else
+            git clone --depth 1 "$BUILD_TARGET" "$TEMP_DIR" || {
+                echo "Error: Failed to clone repository" >&2
+                exit 1
+            }
+        fi
+        cd "$TEMP_DIR"
+        docker build -t staging-lanraragi -f ./tools/build/docker/Dockerfile .
+        cd "$ORIGINAL_DIR"
+    else
+        if [ ! -e "$BUILD_TARGET" ] || [ ! -e "$BUILD_TARGET/tools/build/docker/Dockerfile" ]; then
+            echo "Error: Either $BUILD_TARGET does not exist or $BUILD_TARGET/tools/build/docker/Dockerfile is missing." >&2
+            exit 1
+        fi
+        docker build -t staging-lanraragi -f "$BUILD_TARGET/tools/build/docker/Dockerfile" "$BUILD_TARGET"
     fi
-    docker build -t staging-lanraragi -f $LRR_BUILD_TARGET/tools/build/docker/Dockerfile $LRR_BUILD_TARGET
 else
-    echo "Pulling image: $LRR_STAGING_IMAGE"
-    docker pull $LRR_STAGING_IMAGE
-    docker image tag $LRR_STAGING_IMAGE staging-lanraragi
+    echo "Pulling image: $STAGING_IMAGE"
+    docker pull $STAGING_IMAGE
+    docker image tag $STAGING_IMAGE staging-lanraragi
 fi
 
-docker compose up --remove-orphans --build -d -y
+mkdir -p "$(dirname "$0")/contents"
+docker compose -f "$(dirname "$0")/../docker-compose.yml" up --remove-orphans --build -d -y -t 1
 
 # add "lanraragi" API key.
 docker exec -it staging-redis bash -c "redis-cli <<EOF
@@ -28,11 +92,13 @@ SELECT 2
 HSET LRR_CONFIG apikey lanraragi
 EOF"
 
-# enable nofun mode.
-docker exec -it staging-redis bash -c "redis-cli <<EOF
+# enable nofun mode if requested
+if [ "$NOFUNMODE" -eq 1 ]; then
+    docker exec -it staging-redis bash -c "redis-cli <<EOF
 SELECT 2
 HSET LRR_CONFIG nofunmode 1
 EOF"
+fi
 
 # allow uploads on bind mounts in linux.
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then

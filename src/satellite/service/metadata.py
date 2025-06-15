@@ -140,13 +140,22 @@ class PixivUtil2MetadataService(MetadataService):
             file_path = Path(file_path)
         if not isinstance(file_path, Path):
             raise TypeError(f"Unsupported file type: {type(file_path)}.")
-        file_name = file_path.name
-        if file_name.startswith("pixiv_"):
-            file_name = file_name[6:] # remove "pixiv_"
+        original_file_name = file_path.name.strip()
+        file_name: str
+        if original_file_name.startswith("pixiv_"):
+            file_name = original_file_name[6:] # remove "pixiv_"
+        else:
+            file_name = original_file_name
         
         # try getting the filename.
-        match = re.match(r"\{(\d+)\}", file_name)
-        pixiv_id = match.group(1) if match else ""
+        pixiv_id: str
+        if file_name.startswith("{") and file_name.endswith("}"):
+            match = re.match(r"\{(\d+)\}", file_name)
+            pixiv_id = match.group(1) if match else ""
+        elif file_name.isdigit():
+            pixiv_id = file_name
+        else:
+            raise Exception(f"Unsupported filename format: {original_file_name}")
         return pixiv_id
 
     async def get_metadata_from_id(self, pixiv_id: int) -> ArchiveMetadata:

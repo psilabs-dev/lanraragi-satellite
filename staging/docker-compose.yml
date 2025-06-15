@@ -1,3 +1,8 @@
+networks:
+  staging-network:
+    name: staging-network
+    driver: bridge
+
 services:
 
   staging-redis:
@@ -8,6 +13,8 @@ services:
     healthcheck:
       test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
       start_period: 10s
+    networks:
+      - staging-network
 
   staging-lanraragi:
     image: staging-lanraragi
@@ -23,36 +30,5 @@ services:
     depends_on:
       staging-redis:
         condition: service_healthy
-
-  staging-nhdd-db:
-    image: pgvector/pgvector:pg17
-    shm_size: '1gb'
-    container_name: staging-nhdd-db
-    ports:
-      - 5432:5432
-    environment:
-      - POSTGRES_PASSWORD=postgres
-
-  adminer:
-    image: adminer
-    container_name: adminer
-    ports:
-      - 8080:8080
-
-  # staging-satellite:
-  #   image: staging-satellite
-  #   container_name: staging-satellite
-  #   command: [ "--host", "0.0.0.0" ]
-  #   # user: ${MY_UID}:${MY_GID}
-  #   # mem_limit: '4gb'
-  #   ports: 
-  #     - 8000:8000
-  #   environment:
-  #     - SATELLITE_DISABLE_API_KEY=true
-  #     - LRR_HOST=http://staging-lanraragi:3000
-  #     - LRR_API_KEY=lanraragi
-  #     - NHDD_DB=postgres
-  #     - NHDD_DB_HOST=staging-nhdd-db
-  #     - NHDD_DB_USER=postgres
-  #     - NHDD_DB_PASS=postgres
-  #     - NHDD_DEVICES=cpu
+    networks:
+      - staging-network
