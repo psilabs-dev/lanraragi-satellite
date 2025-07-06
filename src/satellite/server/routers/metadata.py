@@ -39,7 +39,7 @@ async def queue_update_data_from_pixivutil2(
 async def queue_update_archive_metadata_with_plugin(
     lanraragi: LRRClientT, database: DatabaseServiceT, logger: LoggerT,
     background_tasks: BackgroundTasks, plugin_namespace: str, lock_state: LockStateT,
-    retry_ok: bool=False, sleep_time: float=5
+    retry_ok: bool=False, retry_not_found: bool=False, sleep_time: float=5
 ):
     """
     Creates a background task that gets all untagged archives, extracts metadata ID,
@@ -75,6 +75,8 @@ async def queue_update_archive_metadata_with_plugin(
         Namespace of the metadata plugin to invoke (e.g., `pixivmetadata`, `nhplugin`)
     retry_ok : bool = False
         Retry metadata fetch for all successfully scanned archives.
+    retry_not_found : bool = False
+        Retry metadata fetch for all failed archives.
     sleep_time : float = 5
         Sets an upper bound sleep time between metadata plugin calls (random.randint(0, 1) * sleep_time).
     """
@@ -84,7 +86,7 @@ async def queue_update_archive_metadata_with_plugin(
             "message": f"Misconfigured plugin namespace: {plugin_namespace}"
         }, status_code=400)
     background_tasks.add_task(
-        update_metadata_from_plugin, lanraragi, database, plugin_namespace, lock_state.RWLOCK, sleep_time, retry_ok=retry_ok
+        update_metadata_from_plugin, lanraragi, database, plugin_namespace, lock_state.RWLOCK, sleep_time, retry_ok=retry_ok, retry_not_found=retry_not_found
     )
     return JSONResponse({
         "message": f"Queued invokation of the {plugin_namespace} metadata plugin."
