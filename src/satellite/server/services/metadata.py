@@ -54,7 +54,7 @@ async def update_metadata(lanraragi: LRRClient, metadata_service: MetadataServic
         await lanraragi.close()
 
 async def update_metadata_from_plugin(
-        lanraragi: LRRClient, database: DatabaseService, namespace: str, lock: RWLock, avg_sleep_time: float, retry_ok: bool=False
+        lanraragi: LRRClient, database: DatabaseService, namespace: str, lock: RWLock, avg_sleep_time: float, retry_ok: bool=False, retry_not_found: bool=False
 ):
     async def __handle_task(task: Tuple[str, str, int, float, int], task_i: int, total_tasks: int) -> int:
         """
@@ -164,6 +164,22 @@ async def update_metadata_from_plugin(
             logger.info(f"[metadata_plugin_{namespace}] Completed inventory of metadata plugins.")
 
             num_metadata_updated = 0
+
+            if retry_not_found:
+                # collect all NOT_FOUND tasks, change them to PENDING (keep fail count).
+                not_found_tasks = await database.get_metadata_plugin_task_by_status_and_namespace(MetadataPluginTaskStatus.NOT_FOUND.value, namespace)
+                num_not_found_tasks = len(not_found_tasks)
+                logger.info(f"[metadata_plugin_{namespace}] Retrieved {num_not_found_tasks} NOT_FOUND tasks.")
+                for i, task in enumerate(not_found_tasks):
+                    await database.update_metadata_plugin_task(
+                        database.get_metadata_plugin_task_arcid(task),
+                        database.get_metadata_plugin_task_source(task),
+                        namespace,
+                        MetadataPluginTaskStatus.PENDING.value,
+                        time.time(),
+                        database.get_metadata_plugin_task_num_failures(task)
+                    )
+                    logger.info(f"[metadata_plugin_{namespace}] Retrieved NOT_FOUND task: {database.get_metadata_plugin_task_arcid(task)} [{i + 1}/{num_not_found_tasks}]")
 
             if retry_ok:
                 # collect all OK tasks and re-fetch metadata for them.
